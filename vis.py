@@ -1,5 +1,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from import_subset_datasets import *
+from clustering_accuracy import acc
+from sklearn import metrics # AMII and ARI
 
 def lda_grid(em, mapper):
     AA, BB = np.meshgrid(np.linspace(em.A.min(), em.A.max(), 50),
