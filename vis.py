@@ -11,7 +11,7 @@ def lda_grid(em, mapper):
 
 def plot_contours_UMAP(gg, lda, AA, BB, grid):
     print(grid.shape)
-    cmaps = ['Reds','Greens','Blues','Purples','Oranges']
+    cmaps = ['Reds','Greens','Blues','Purples','Oranges','Greys','YlOrRd','PuBu','YlGn','pink'] 
     cnt = lda.predict_proba(grid)
     fig = gg.draw()
     ax = fig.get_axes()[0]
@@ -19,7 +19,7 @@ def plot_contours_UMAP(gg, lda, AA, BB, grid):
         ax.contour(AA, BB, cnt[:,i].reshape(AA.shape), cmap=cmaps[i])#, [0.5])
         
 def plot_regions_UMAP(gg, lda, AA, BB, grid):
-    colors = ['r','g','b','c','y']
+    colors = ['r','g','b','c','m','y','k','chartreuse','orange','purple']
     preds = lda.predict(grid)
     #cnt = lda.predict_proba(grid)
     u = np.unique(preds)
@@ -34,14 +34,20 @@ def plot_regions_UMAP(gg, lda, AA, BB, grid):
             print(colors[np.where(preds[i*grid_size+j] == u)[0][0]])
             ax.scatter(AA[i,j], BB[i,j], marker='s', ms=2, c=colors[np.where(preds[i*grid_size+j] == u)[0][0]])
 
-def print_metrics(true, pred):
-    print("Accuracy", acc(true.astype(int), pred.astype(int)))
-    print(metrics.confusion_matrix(true.astype(int), pred.astype(int)))
+def print_metrics(true, pred, conf=False):
+    dp = 5
+    label = true.astype(int)
+    print("Accuracy", round(acc(label, pred.astype(int)), dp))
+    print("ARI", round(metrics.adjusted_rand_score(label, pred.astype(str)), dp))
+    print("AMI", round(metrics.adjusted_mutual_info_score(label, pred.astype(str)), dp))
+    if conf:
+        print(metrics.confusion_matrix(true.astype(int), pred.astype(int)))
+    
     
 def plot_contours(X, f, ax):
     AA, BB = np.meshgrid(np.linspace(X[:,0].min(), X[:,0].max(), 50),
                  np.linspace(X[:,1].min(), X[:,1].max(), 50))
-    cmaps = ['Reds','Greens','Blues','Purples','Oranges']
+    cmaps = ['Reds','Greens','Blues','Purples','Oranges','Greys','YlOrRd','PuBu','YlGn','pink'] 
     grid = np.c_[AA.ravel(), BB.ravel()]
     cnt = f(grid)
     for i in range(cnt.shape[1]):
