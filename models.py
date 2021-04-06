@@ -9,7 +9,7 @@ import warnings
 # MATH and STATS:
 import math
 
-from scipy import stats, special, optimize
+from scipy import stats, special, optimize, spatial
 
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
@@ -79,7 +79,9 @@ class LDA():
         r = range(self.K) if ki is None else [ki]
         for k in r:
             m = X - self.means[:,k]
-            ret += [np.diag((X - self.means[:,k]) @ np.linalg.inv(self.covariances)[k,:,:] @ (X - self.means[:,k]).T)]
+            kth_maha = np.array(list(map(lambda d: d @ np.linalg.inv(self.covariances)[k,:,:] @ d[:,None], m))).T
+            #kth_maha = np.diag(m @ np.linalg.inv(self.covariances)[k,:,:] @ m.T)]
+            ret += [kth_maha]
         return np.vstack(ret) if ki is None else ret[0]
     
     def _general_discriminants(self, X): #KxN
@@ -111,10 +113,10 @@ class LDA():
                 if self.pool_covs else self.covariances 
                     
         self.priors = n / n.sum()
-        
+        #print(self.priors.sum())
         assert(n.sum() == X.shape[0])
         assert(self.M == self.covariances.shape[2])
-        assert (self.priors.sum() == 1)
+        assert (np.allclose(self.priors.sum(), 1))
         return classes
     
     def _dk_from_method(self, X):
