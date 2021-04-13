@@ -5,10 +5,10 @@ import os
 import time
 import csv 
 import warnings
+from dataset_utils import *
 
 # MATH and STATS:
 import math
-
 from scipy import stats, special, optimize, spatial
 
 import rpy2.robjects as robjects
@@ -19,6 +19,32 @@ r = robjects.r
 psych = importr('psych')
 rrcov = importr('rrcov')
 SpatialNP = importr('SpatialNP')
+LaplacesDemon = importr('LaplacesDemon')
+
+def t_EM_e_step(D, dof, mu, cov):
+    delta = np.einsum('ij,ij->i', mu, np.linalg.solve(cov,mu.T).T)
+    z = (dof + D) / (dof + delta)
+    return z,delta
+
+def fit_t_dof(X, mean, cov, dof_0, max_iter=200, mu=None, tol=1e-3):
+    N,D = X.shape
+    mu = mu if mu is not None else X - mean.squeeze()[None,:]
+    dof = dof_0
+    i = 0
+    while i<max_iter:
+        z,_ = t_EM_e_step(D, dof, mu, cov)
+
+        d_t = (np.log(z) + special.digamma((dof + D)/2) - np.log((dof + D)/2) - z).sum()
+        dof_obj = lambda v: -( -N*special.gammaln(v/2) + N*v*np.log(v/2)/2 + v*d_t/2 )
+        dof_grad = lambda v: -(N/2 * (-special.digamma(v/2) + np.log(v/2) + 1) + d_t/2)        
+        dof_new = optimize.minimize(dof_obj, dof, jac=dof_grad, bounds=[(0,None)]).x
+        if abs(dof_new-dof)/dof <= tol: 
+            dof = dof_new
+            break
+        dof = dof_new
+        i+=1
+    return dof
+    
 
 def fit_t(X, iter=200, eps=1e-6):
     N,D = X.shape
@@ -30,8 +56,7 @@ def fit_t(X, iter=200, eps=1e-6):
 
     for i in range(iter):
         # E step
-        delta = np.einsum('ij,ij->i', mu, np.linalg.solve(cov,mu.T).T)
-        z = (dof + D) / (dof + delta)
+        z,delta = t_EM_e_step(D, dof, mu, cov)
         
         obj.append(
             -N*np.linalg.slogdet(cov)[1]/2 - (z*delta).sum()/2 \
@@ -42,10 +67,7 @@ def fit_t(X, iter=200, eps=1e-6):
         mean = (X * z[:,None]).sum(axis=0).reshape(-1,1) / z.sum()
         mu = X - mean.squeeze()[None,:]
         cov = np.einsum('ij,ik->jk', mu, mu * z[:,None])/N
-        d_t = (np.log(z) + special.digamma((dof + D)/2) - np.log((dof + D)/2) - z).sum()
-        dof_obj = lambda v: -( -N*special.gammaln(v/2) + N*v*np.log(v/2)/2 + v*d_t/2 )
-        dof_grad = lambda v: -(N/2 * (-special.digamma(v/2) + np.log(v/2) + 1) + d_t/2)        
-        dof = optimize.minimize(dof_obj, dof, jac=dof_grad, bounds=[(0,None)]).x
+        dof = fit_t_dof(X, None, cov, dof, max_iter=1, mu=mu)
 
     return mean.squeeze(), cov, dof
 
@@ -127,9 +149,10 @@ class LDA():
         elif self.method=='generalised':
             return self._general_discriminants(X)
                 
-    def predict(self, X):
+    def predict(self, X, percent_outliers=0):
         dk = self._dk_from_method(X)
-        return self.ks[dk.argmax(axis=0)] 
+        y = self.ks[dk.argmax(axis=0)]
+        return label_outliers(X, y, self.means, self.covariances, thres=percent_outliers)
        
     def predict_proba(self, X):
         dk = self._dk_from_method(X)
@@ -316,3 +339,38 @@ class RGQDA(GQDA):
         #print(list(M))
         return list(M)   
 
+def mse_means(true, pred):
+    return np.array([np.square(t-pred.T).sum(axis=1).min() for t in true.T]).mean()
+
+def label_outliers_kth(X_k, mean, cov, thres=0.05):   
+    outlierness = np.zeros((X_k.shape[0], )).astype(bool)         
+    thres = stats.chi2.ppf(1 - thres, X_k.shape[1])
+
+    diff = X_k - mean
+    sig_cluster = np.mean(diff * diff) 
+    maha_cluster = (np.dot(diff, np.linalg.inv(cov)) * diff).sum(1) / sig_cluster
+    outlierness = (maha_cluster >  thres)
+    return outlierness
+
+def label_outliers_kth2(X_k, mean, cov, thres=0):
+    diff = X_k - mean
+    maha = (np.dot(diff, np.linalg.inv(cov)) * diff).sum(1)
+    _,n_to_keep = split(X_k.shape[0], thres)
+    t = maha[np.argsort(maha)[n_to_keep-1]]
+    outlierness = (maha > t)
+    return outlierness
+
+def label_outliers(X,y, means,covs, thres=0.05):
+    if thres==0: return y
+    y_new = y.copy()
+    ks = np.unique(y)
+    for ki, k in enumerate(ks):
+        k = int(k)
+        outlierness = label_outliers_kth2(X[y==k,:], means[:,ki], covs[ki,:,:], thres=thres)
+        #print(outlierness.sum())
+        b = np.where(y==k)[0][outlierness]
+        #print(b)
+        y_new[b]=-1#k+5
+    return y_new
+
+def evaluate_estimators(model, means, covs):

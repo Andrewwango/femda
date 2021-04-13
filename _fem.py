@@ -85,11 +85,11 @@ class FEM():
         if self.rand_initialization:
             self.alpha_ = np.random.rand(3)
             self.alpha_ /= np.sum(self.alpha_) 
-            self.mu_ = (np.amax(X, axis=0)-np.amin(X, axis=0)) * np.random.random_sample((K, p))+ np.amin(X, axis=0)
+            self.mu_ = (np.amax(X, axis=0)-np.amin(X, axis=0)) * np.random.random_sample((self.K, p))+ np.amin(X, axis=0)
             self.Sigma_ = np.zeros((self.K, p, p))
             self.tau_ = np.ones((n, self.K))
             for k in range(self.K):
-                Sigma[k] = np.eye(p)
+                self.Sigma_[k] = np.eye(p)
 
         else:
             

@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 from import_subset_datasets import *
 from clustering_accuracy import acc
 from sklearn import metrics # AMII and ARI
+from math import ceil
 
 def lda_grid(em, mapper):
     AA, BB = np.meshgrid(np.linspace(em.A.min(), em.A.max(), 50),
@@ -36,10 +37,15 @@ def plot_regions_UMAP(gg, lda, AA, BB, grid):
 
 def print_metrics(true, pred, conf=False):
     dp = 5
-    label = true.astype(int)
-    print("Accuracy", round(acc(label, pred.astype(int)), dp), "ARI", round(metrics.adjusted_rand_score(label, pred.astype(str)), dp), "AMI", round(metrics.adjusted_mutual_info_score(label, pred.astype(str)), dp))
+    true = np.array(true)
+    pred = np.array(pred)
+    t = true#[pred>-1]
+    p = pred#[pred>-1]
+    #print(t,p)
+    label = t.astype(int)
+    print("N", len(t), "Accuracy", round(acc(label, p.astype(int)), dp), "ARI", round(metrics.adjusted_rand_score(label, p.astype(str)), dp), "AMI", round(metrics.adjusted_mutual_info_score(label, p.astype(str)), dp))
     if conf:
-        print(metrics.confusion_matrix(true.astype(int), pred.astype(int)))
+        print(metrics.confusion_matrix(t.astype(int), p.astype(int)))
     
     
 def plot_contours(X, f, ax, lims=None):
@@ -57,13 +63,13 @@ def plot_contours(X, f, ax, lims=None):
 
 def plot_dataset(X, y, ax):
     for u in np.unique(y):
-        ax.scatter(X[y==u,0],X[y==u,1])
+        ax.scatter(X[y==u,0],X[y==u,1], label=str(u))
 
 def plot_models(X, y, X_test, models, lims=[[-10,10],[-10,10]]):
     many = type(models) is tuple and len(models)>1
     models = models if many else [models]
     cols = 5
-    rows = 2*int((len(models))/cols+1)
+    rows = 2*ceil(len(models)/cols)
     fig, axs = plt.subplots(rows, cols, figsize=(cols*4,rows*4)) if many else plt.subplots(1,2, figsize=(8,4))
     axs = axs if many else axs[:,None]
     for i,model in enumerate(models):
