@@ -9,11 +9,12 @@ def split(n, perc):
     return a,b
 
 def apply_outlierness(outliernesses, data):
+    y = data.copy()
     outlierness = np.hstack(outliernesses)
-    print(outlierness.shape, data.shape)
-    assert(len(outlierness)==data.shape[0])
-    data[outlierness] = -1
-    return data
+    #print(outlierness.shape, y.shape)
+    assert(len(outlierness)==y.shape[0])
+    y[outlierness] = -1
+    return y
 
 def contaminated(n, dist, contamination, loc, shape, df, hard):
     a,b = split(n, contamination)
@@ -21,7 +22,7 @@ def contaminated(n, dist, contamination, loc, shape, df, hard):
     if contamination == 0:
         return X1, np.zeros((X1.shape[0]))>1
     else:
-        X1c = dist(loc=(-9 if hard else 9)*loc, shape=4*shape, df=df).rvs(size=a)
+        X1c = dist(loc=loc, shape=4*shape, df=df).rvs(size=a)#(-9 if hard else 9)*
         return np.vstack([X1, X1c]), np.hstack([np.zeros((b))>1, np.ones((a))>0])
 
 def combine_dataset(X1, X2, X1perc):
@@ -49,3 +50,6 @@ def flip_bits(a, perc):
 
 def toeplitz(r, p):
     return linalg.toeplitz(np.array([r**j for j in range(p)]))
+
+def normalise(a):
+    return (a.T/np.linalg.norm(a, axis=1)).T

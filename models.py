@@ -339,8 +339,8 @@ class RGQDA(GQDA):
         #print(list(M))
         return list(M)   
 
-def mse_means(true, pred):
-    return np.array([np.square(t-pred.T).sum(axis=1).min() for t in true.T]).mean()
+def errors_means(true, pred):
+    return np.array([np.square(t-pred.T).sum(axis=1).min() for t in true.T])#.mean()
 
 def label_outliers_kth(X_k, mean, cov, thres=0.05):   
     outlierness = np.zeros((X_k.shape[0], )).astype(bool)         
@@ -373,4 +373,16 @@ def label_outliers(X,y, means,covs, thres=0.05):
         y_new[b]=-1#k+5
     return y_new
 
-def evaluate_estimators(model, means, covs):
+def errors_covs(true, pred):
+    p = true.shape[1]
+    assert (true.shape[1]==pred.shape[2])
+    
+    def error_cov(cov1, cov2): return np.linalg.norm(cov1/np.trace(cov1)*np.trace(cov2) - cov2, ord='fro')/(p*p)
+    
+    return np.array([np.min([error_cov(pred_cov, true_cov) for pred_cov in pred]) for true_cov in true])
+
+
+def evaluate_estimators(model, true_means, true_covs):
+    means = model.means
+    covs = model.covariances
+    return errors_means(true_means, means), errors_covs(true_covs, covs)
