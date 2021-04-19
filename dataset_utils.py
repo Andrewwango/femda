@@ -1,5 +1,7 @@
 import numpy as np
 from scipy import linalg
+from fit import *
+
 def split(n, perc):
     a = int(np.floor(n*perc))
     #b = int(np.ceil(n*(1-perc)))
@@ -53,3 +55,13 @@ def toeplitz(r, p):
 
 def normalise(a):
     return (a.T/np.linalg.norm(a, axis=1)).T
+
+def normalise_means(means_dict):
+    return dict([(k,v/np.linalg.norm(v)) for (k,v) in means_dict.items()])
+
+def normalise_centered(X, y):
+    X_copy = X.copy()
+    for k in np.unique(y):
+        mean = fit_t(X[y==k])[0]
+        X_copy[y==k] = normalise(X[y==k]-mean)+mean
+    return X_copy

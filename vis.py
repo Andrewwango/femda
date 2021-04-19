@@ -66,7 +66,8 @@ def plot_dataset(X, y, ax):
         ax.scatter(X[y==u,0],X[y==u,1], label=str(u))
 
 def plot_models(X, y, X_test, models, percent_outliers=0, lims=[[-10,10],[-10,10]]):
-    many = type(models) is tuple and len(models)>1
+    models = models if type(models) is not dict else list(models.values())
+    many = (type(models) is tuple or type(models) is list) and len(models)>1
     models = models if many else [models]
     cols = 5
     rows = 2*ceil(len(models)/cols)

@@ -177,7 +177,8 @@ class FEM():
             psd = _PSD(self.Sigma_[k])
             prec_U, logdet = psd.U, psd.log_pdet
             diff = X - self.mu_[k]
-            logdensity = -0.5 * (p * np.log(2 * np.pi) + p * np.log(self.tau_[:, k]) + logdet + p)            
+            logdensity = -0.5 * (p * np.log(2 * np.pi) + p * np.log(self.tau_[:, k]) + logdet + p)
+            print(self.tau_[:,k])
             cond_prob_matrix[:, k] = np.exp(logdensity)  * self.alpha_[k]            
         
         sum_row = np.sum(cond_prob_matrix, axis = 1) 
@@ -267,7 +268,7 @@ class FEM():
                     
                     diff = X - mu_fixed_point
                     Sigma_fixed_point_new = np.dot(cond_prob[:, k]/tau_ite * diff.T, diff) / (n * alpha_new[k])
-                    Sigma_fixed_point_new *= p / np.trace(Sigma_fixed_point_new)
+                    #Sigma_fixed_point_new *= p / np.trace(Sigma_fixed_point_new)
                     
                 if self.version==2:
                     

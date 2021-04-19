@@ -6,6 +6,7 @@ import time
 import csv 
 import warnings
 from dataset_utils import *
+from fit import *
 
 # MATH and STATS:
 import math
@@ -21,55 +22,7 @@ rrcov = importr('rrcov')
 SpatialNP = importr('SpatialNP')
 LaplacesDemon = importr('LaplacesDemon')
 
-def t_EM_e_step(D, dof, mu, cov):
-    delta = np.einsum('ij,ij->i', mu, np.linalg.solve(cov,mu.T).T)
-    z = (dof + D) / (dof + delta)
-    return z,delta
 
-def fit_t_dof(X, mean, cov, dof_0, max_iter=200, mu=None, tol=1e-3):
-    N,D = X.shape
-    mu = mu if mu is not None else X - mean.squeeze()[None,:]
-    dof = dof_0
-    i = 0
-    while i<max_iter:
-        z,_ = t_EM_e_step(D, dof, mu, cov)
-
-        d_t = (np.log(z) + special.digamma((dof + D)/2) - np.log((dof + D)/2) - z).sum()
-        dof_obj = lambda v: -( -N*special.gammaln(v/2) + N*v*np.log(v/2)/2 + v*d_t/2 )
-        dof_grad = lambda v: -(N/2 * (-special.digamma(v/2) + np.log(v/2) + 1) + d_t/2)        
-        dof_new = optimize.minimize(dof_obj, dof, jac=dof_grad, bounds=[(0,None)]).x
-        if abs(dof_new-dof)/dof <= tol: 
-            dof = dof_new
-            break
-        dof = dof_new
-        i+=1
-    return dof
-    
-
-def fit_t(X, iter=200, eps=1e-6):
-    N,D = X.shape
-    cov = np.cov(X,rowvar=False)
-    mean = X.mean(axis=0)
-    mu = X - mean[None,:]
-    dof = 3
-    obj = []
-
-    for i in range(iter):
-        # E step
-        z,delta = t_EM_e_step(D, dof, mu, cov)
-        
-        obj.append(
-            -N*np.linalg.slogdet(cov)[1]/2 - (z*delta).sum()/2 \
-            -N*special.gammaln(dof/2) + N*dof*np.log(dof/2)/2 + dof*(np.log(z)-z).sum()/2)
-        if len(obj) > 1 and np.abs(obj[-1] - obj[-2]) < eps: break
-        
-        # M step
-        mean = (X * z[:,None]).sum(axis=0).reshape(-1,1) / z.sum()
-        mu = X - mean.squeeze()[None,:]
-        cov = np.einsum('ij,ik->jk', mu, mu * z[:,None])/N
-        dof = fit_t_dof(X, None, cov, dof, max_iter=1, mu=mu)
-
-    return mean.squeeze(), cov, dof
 
 ## Custom LDA with Gaussians
 class LDA():
@@ -125,6 +78,7 @@ class LDA():
         self.intercepts = -0.5*np.diag(self.means.T.dot(cov_inv.dot(self.means)))  
     
     def fit(self, X, y):
+        st=time.time()
         self.ks = np.unique(y); self.K = len(self.ks); self.M = X.shape[1]
         classes = [X[np.where(y == k), :][0,:,:] for k in self.ks] #Kxn_kxM
         n = np.array([c.shape[0] for c in classes])
@@ -139,6 +93,7 @@ class LDA():
         assert(n.sum() == X.shape[0])
         assert(self.M == self.covariances.shape[2])
         assert (np.allclose(self.priors.sum(), 1))
+        print(time.time()-st)
         return classes
     
     def _dk_from_method(self, X):
@@ -339,8 +294,6 @@ class RGQDA(GQDA):
         #print(list(M))
         return list(M)   
 
-def errors_means(true, pred):
-    return np.array([np.square(t-pred.T).sum(axis=1).min() for t in true.T])#.mean()
 
 def label_outliers_kth(X_k, mean, cov, thres=0.05):   
     outlierness = np.zeros((X_k.shape[0], )).astype(bool)         
@@ -373,16 +326,25 @@ def label_outliers(X,y, means,covs, thres=0.05):
         y_new[b]=-1#k+5
     return y_new
 
+def errors_means(true, pred):
+    #print(true,pred)
+    return np.array([(np.square(t-pred[i])).sum() for i,t in enumerate(true)])
+    #return np.array([np.square(t-pred.T).sum(axis=1).min() for t in true.T])#.mean()
+
 def errors_covs(true, pred):
-    p = true.shape[1]
-    assert (true.shape[1]==pred.shape[2])
+    p = true[0].shape[0]
+    assert (true[0].shape[1]==pred[0].shape[0])
     
     def error_cov(cov1, cov2): return np.linalg.norm(cov1/np.trace(cov1)*np.trace(cov2) - cov2, ord='fro')/(p*p)
     
-    return np.array([np.min([error_cov(pred_cov, true_cov) for pred_cov in pred]) for true_cov in true])
+    return np.array([error_cov(pred[i], t) for i,t in enumerate(true)])
+    #return np.array([np.min([error_cov(pred_cov, true_cov) for pred_cov in pred]) for true_cov in true])
 
 
 def evaluate_estimators(model, true_means, true_covs):
-    means = model.means
+    means = model.means.T
     covs = model.covariances
-    return errors_means(true_means, means), errors_covs(true_covs, covs)
+    true_means_list = [true_means[key] for key in sorted(true_means.keys())]
+    #print(means, true_means_list)
+    true_covs_list = [true_covs[key] for key in sorted(true_covs.keys())]
+    return errors_means(true_means_list, means), errors_covs(true_covs_list, covs)
