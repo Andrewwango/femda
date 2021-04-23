@@ -24,8 +24,16 @@ def contaminated(n, dist, contamination, loc, shape, df, hard):
     if contamination == 0:
         return X1, np.zeros((X1.shape[0]))>1
     else:
-        X1c = dist(loc=loc, shape=4*shape, df=df).rvs(size=a)#(-9 if hard else 9)*
-        return np.vstack([X1, X1c]), np.hstack([np.zeros((b))>1, np.ones((a))>0])
+        if not hard:
+            X1c = dist(loc=loc, shape=4*shape, df=df).rvs(size=a)
+            return np.vstack([X1, X1c]), np.hstack([np.zeros((b))>1, np.ones((a))>0])
+        else:
+            X1cs = np.zeros((a, shape.shape[0]))
+            taus = np.linspace(1e-3, 1e4, a)
+            for i,tau in enumerate(taus):
+                X1cs[i, :] = dist(loc=loc, shape=tau*shape, df=df).rvs(size=1)
+            return np.vstack([X1, X1cs]), np.hstack([np.zeros((b))>1, np.ones((a))>0])
+
 
 def combine_dataset(X1, X2, X1perc):
     assert(X1.shape[0] == X2.shape[0])

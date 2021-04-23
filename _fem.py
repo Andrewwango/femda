@@ -83,7 +83,7 @@ class FEM():
         n, p = X.shape
 
         if self.rand_initialization:
-            self.alpha_ = np.random.rand(3)
+            self.alpha_ = np.random.rand(self.K)
             self.alpha_ /= np.sum(self.alpha_) 
             self.mu_ = (np.amax(X, axis=0)-np.amin(X, axis=0)) * np.random.random_sample((self.K, p))+ np.amin(X, axis=0)
             self.Sigma_ = np.zeros((self.K, p, p))
@@ -178,7 +178,7 @@ class FEM():
             prec_U, logdet = psd.U, psd.log_pdet
             diff = X - self.mu_[k]
             logdensity = -0.5 * (p * np.log(2 * np.pi) + p * np.log(self.tau_[:, k]) + logdet + p)
-            print(self.tau_[:,k])
+            #print(self.tau_[:,k])
             cond_prob_matrix[:, k] = np.exp(logdensity)  * self.alpha_[k]            
         
         sum_row = np.sum(cond_prob_matrix, axis = 1) 
@@ -289,8 +289,8 @@ class FEM():
                     Sigma_fixed_point_new *= p / np.trace(Sigma_fixed_point_new)
 
                 convergence_fp = True
-                convergence_fp = convergence_fp and (math.sqrt(np.inner(mu_fixed_point - mu_fixed_point_new, mu_fixed_point - mu_fixed_point_new)/p) < 10**(-5))
-                convergence_fp = convergence_fp and (np.linalg.norm(Sigma_fixed_point_new-Sigma_fixed_point, ord='fro')/p) < 10**(-5)
+                convergence_fp = convergence_fp and (math.sqrt(np.inner(mu_fixed_point - mu_fixed_point_new, mu_fixed_point - mu_fixed_point_new)/p) < 10**(-6))
+                convergence_fp = convergence_fp and (np.linalg.norm(Sigma_fixed_point_new-Sigma_fixed_point, ord='fro')/p) < 10**(-6)
 
                 mu_fixed_point = mu_fixed_point_new.copy()
                 Sigma_fixed_point = Sigma_fixed_point_new.copy() 

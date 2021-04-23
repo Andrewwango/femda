@@ -93,7 +93,7 @@ class LDA():
         assert(n.sum() == X.shape[0])
         assert(self.M == self.covariances.shape[2])
         assert (np.allclose(self.priors.sum(), 1))
-        print(time.time()-st)
+        #print("Fitting time", time.time()-st)
         return classes
     
     def _dk_from_method(self, X):

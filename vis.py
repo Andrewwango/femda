@@ -35,7 +35,7 @@ def plot_regions_UMAP(gg, lda, AA, BB, grid):
             print(colors[np.where(preds[i*grid_size+j] == u)[0][0]])
             ax.scatter(AA[i,j], BB[i,j], marker='s', ms=2, c=colors[np.where(preds[i*grid_size+j] == u)[0][0]])
 
-def print_metrics(true, pred, conf=False):
+def print_metrics(true, pred, conf=False, verbose=True, ret=False):
     dp = 5
     true = np.array(true)
     pred = np.array(pred)
@@ -43,9 +43,17 @@ def print_metrics(true, pred, conf=False):
     p = pred#[pred>-1]
     #print(t,p)
     label = t.astype(int)
-    print("N", len(t), "Accuracy", round(acc(label, p.astype(int)), dp), "ARI", round(metrics.adjusted_rand_score(label, p.astype(str)), dp), "AMI", round(metrics.adjusted_mutual_info_score(label, p.astype(str)), dp))
-    if conf:
-        print(metrics.confusion_matrix(t.astype(int), p.astype(int)))
+    accuracy = round(acc(label, p.astype(int)), dp)
+    ari = round(metrics.adjusted_rand_score(label, p.astype(str)), dp)
+    ami = round(metrics.adjusted_mutual_info_score(label, p.astype(str)), dp)
+    if verbose:
+        print("N", len(t), "Accuracy", accuracy, "ARI", ari, "AMI", ami)
+        if conf:
+            print(metrics.confusion_matrix(t.astype(int), p.astype(int)))
+    
+    if ret:
+        return (accuracy, ari, ami)
+    
     
     
 def plot_contours(X, f, ax, lims=None):
@@ -61,9 +69,12 @@ def plot_contours(X, f, ax, lims=None):
         ax.contour(AA, BB, cnt[:,i].reshape(AA.shape), levels=[0.5], linewidths=3)#, colors=colors[i])#, [0.5])
     return cnt
 
-def plot_dataset(X, y, ax):
+def plot_dataset(X, y, ax, lims=None):
     for u in np.unique(y):
         ax.scatter(X[y==u,0],X[y==u,1], label=str(u))
+        if lims is not None:
+            ax.set_xlim(lims[0])
+            ax.set_ylim(lims[1])
 
 def plot_models(X, y, X_test, models, percent_outliers=0, lims=[[-10,10],[-10,10]]):
     models = models if type(models) is not dict else list(models.values())
@@ -94,6 +105,32 @@ def plot_means(models):
     plt.legend()
 
     
+
+def box_plot(result_book, algos=None, measures=None, e_loc_lims=None, e_sc_lims=None):
+    
+    # result_book: [algos, measures, runs]
+    sbsize = (2,3) if result_book.shape[1] == 6 else (2,2)
+    sbmap = {0: [1,0], 1: [0,0], 2:[0,1], 3:[0,2], 4:[1,1], 5:[1,2]} if result_book.shape[1] == 6 else {0: [1,1], 1: [0,0], 2:[0,1], 3:[1,0]}
+    fig,axs = plt.subplots(*sbsize, figsize=(4*len(measures)/2,4*2))
+    
+    for i in range(len(measures)):
+        m,n = sbmap[i]
+        axs[m,n].boxplot(result_book[:,i,:].T)
+        axs[m,n].set_xticklabels(algos, rotation=45)
+        axs[m,n].set_ylabel(measures[i])
+        #if "estimation" in measures[m]:
+            #femdaloc = np.where(["FEMDA" in k for k in algos])[0][0]
+            #axs[m].set_ylim(bottom=-0.00001, top=result_book[femdaloc, m, :].max()*100)
+    
+    if e_loc_lims is not None:
+        i = np.where(["estimation" in k for k in measures])[0][0]
+        m,n = sbmap[i]
+        axs[m,n].set_ylim(e_loc_lims)
+    if e_sc_lims is not None:
+        i = np.where(["estimation" in k for k in measures])[0][1]
+        m,n = sbmap[i]
+        axs[m,n].set_ylim(e_sc_lims)    
+    fig.tight_layout()
     
 def bar_plot(ax, data, labels, colors=None, total_width=0.8, single_width=1, legend=True):
     """Draws a bar plot with multiple bars per data point.
