@@ -37,6 +37,8 @@ def plot_regions_UMAP(gg, lda, AA, BB, grid):
 
 def print_metrics(true, pred, conf=False, verbose=True, ret=False):
     dp = 5
+    if true is None or pred is None:
+        return (0,0,0)
     true = np.array(true)
     pred = np.array(pred)
     t = true#[pred>-1]

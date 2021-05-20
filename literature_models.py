@@ -82,14 +82,18 @@ class LDA():
         self.ks = np.unique(y); self.K = len(self.ks); self.M = X.shape[1]
         classes = [X[np.where(y == k), :][0,:,:] for k in self.ks] #Kxn_kxM
         n = np.array([c.shape[0] for c in classes])
-        self.parameters = [self.estimate_parameters(c) for c in classes]
+        
+        try:
+            self.parameters = [self.estimate_parameters(c) for c in classes]
+        except np.linalg.LinAlgError:
+            return None
         self.means = np.array([param[0] for param in self.parameters]).T
         self.covariances = np.array([param[1] for param in self.parameters])
         self.covariances = np.repeat(np.sum(n[:,None,None] * self.covariances, axis=0)[None,:],self.K,axis=0) / n.sum() \
                 if self.pool_covs else self.covariances 
                     
         self.priors = n / n.sum()
-        #print(self.priors.sum())
+
         assert(n.sum() == X.shape[0])
         assert(self.M == self.covariances.shape[2])
         assert (np.allclose(self.priors.sum(), 1))
@@ -105,7 +109,12 @@ class LDA():
             return self._general_discriminants(X)
                 
     def predict(self, X, percent_outliers=0):
-        dk = self._dk_from_method(X)
+        if self.parameters is None:
+            return None
+        try:
+            dk = self._dk_from_method(X)
+        except np.linalg.LinAlgError:
+            return None
         y = self.ks[dk.argmax(axis=0)]
         return label_outliers(X, y, self.means, self.covariances, thres=percent_outliers)
        
@@ -145,23 +154,9 @@ class t_LDA(LDA):
             
     def fit(self, X,y):
         super().fit(X,y)
+        if self.parameters is None:
+            return None
         self.dofs = np.array([param[2] for param in self.parameters]).squeeze()
-
-"""def _discriminants(self, X): #NxM -> KxN
-    if (self.coefficients is None) or (self.intercepts is None):
-        self.calculate_discriminant_params()
-    assert((self.priors is not None) and (self.coefficients is not None) and (self.intercepts is not None))
-    v = self.dofs
-    cov_inv = np.linalg.inv(self.covariances[0,:,:])
-    return self.coefficients.dot(X.T) + (self.intercepts + np.log(self.priors))[None,:].T + np.outer(np.diag(X.dot(cov_inv.dot(X.T))), -0.5*(1+(self.M/v)).reshape(1,self.K)).T
-def calculate_discriminant_params(self): #obsolete
-    cov_inv = np.linalg.inv(self.covariances[0,:,:])
-    v = self.dofs
-    self.coefficients = self.means.T.dot(cov_inv) * (1+(self.M/v)).reshape(self.K,1)
-    self.intercepts = np.diag(self.means.T.dot(cov_inv.dot(self.means))) * -0.5*(1+(self.M/v)).reshape(1,self.K) + \
-        (special.gammaln((v+self.M)/2) - special.gammaln(v/2) - 0.5*self.M*np.log(v)).reshape(1,self.K)
-    self.intercepts = self.intercepts.squeeze()
-Note: t-distribution discriminants can't be linear as c * xTSx depends on v (and k) in general"""
 
 ## t-QDA
 class t_QDA(t_LDA):
@@ -177,6 +172,8 @@ class GQDA(QDA):
     
     def fit(self, X,y,c=None):
         classes = super().fit(X,y) #Kx[n_k, M]
+        if self.parameters is None:
+            return None
         
         if c is not None:
             self.c = c
@@ -228,7 +225,6 @@ class GQDA(QDA):
     def _bose_k(self):
         return np.array([0.5/self.c])
         
-        #def predict(self, X):
 
 ## RGQDA (becomes classical QDA with robust estimator if c=1) 
 class RGQDA(GQDA):
@@ -295,56 +291,3 @@ class RGQDA(GQDA):
         return list(M)   
 
 
-def label_outliers_kth(X_k, mean, cov, thres=0.05):   
-    outlierness = np.zeros((X_k.shape[0], )).astype(bool)         
-    thres = stats.chi2.ppf(1 - thres, X_k.shape[1])
-
-    diff = X_k - mean
-    sig_cluster = np.mean(diff * diff) 
-    maha_cluster = (np.dot(diff, np.linalg.inv(cov)) * diff).sum(1) / sig_cluster
-    outlierness = (maha_cluster >  thres)
-    return outlierness
-
-def label_outliers_kth2(X_k, mean, cov, thres=0):
-    diff = X_k - mean
-    maha = (np.dot(diff, np.linalg.inv(cov)) * diff).sum(1)
-    _,n_to_keep = split(X_k.shape[0], thres)
-    t = maha[np.argsort(maha)[n_to_keep-1]]
-    outlierness = (maha > t)
-    return outlierness
-
-def label_outliers(X,y, means,covs, thres=0.05):
-    if thres==0: return y
-    y_new = y.copy()
-    ks = np.unique(y)
-    for ki, k in enumerate(ks):
-        k = int(k)
-        outlierness = label_outliers_kth2(X[y==k,:], means[:,ki], covs[ki,:,:], thres=thres)
-        #print(outlierness.sum())
-        b = np.where(y==k)[0][outlierness]
-        #print(b)
-        y_new[b]=-1#k+5
-    return y_new
-
-def errors_means(true, pred):
-    #print(true,pred)
-    return np.array([(np.square(t-pred[i])).sum() for i,t in enumerate(true)])
-    #return np.array([np.square(t-pred.T).sum(axis=1).min() for t in true.T])#.mean()
-
-def errors_covs(true, pred):
-    p = true[0].shape[0]
-    assert (true[0].shape[1]==pred[0].shape[0])
-    
-    def error_cov(cov1, cov2): return np.linalg.norm(cov1/np.trace(cov1)*np.trace(cov2) - cov2, ord='fro')/(p*p)
-    
-    return np.array([error_cov(pred[i], t) for i,t in enumerate(true)])
-    #return np.array([np.min([error_cov(pred_cov, true_cov) for pred_cov in pred]) for true_cov in true])
-
-
-def evaluate_estimators(model, true_means, true_covs):
-    means = model.means.T
-    covs = model.covariances
-    true_means_list = [true_means[key] for key in sorted(true_means.keys())]
-    #print(means, true_means_list)
-    true_covs_list = [true_covs[key] for key in sorted(true_covs.keys())]
-    return errors_means(true_means_list, means), errors_covs(true_covs_list, covs)

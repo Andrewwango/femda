@@ -43,8 +43,10 @@ def combine_dataset(X1, X2, X1perc):
     return out
     
 def contaminate_dataset(a, perc):
-    idx = np.random.choice(len(a),int(np.floor(len(a)*perc)),replace=False)
-    a[idx, :] = 10*a[idx, :]
+    c = int(np.floor(len(a)*perc))
+    idx = np.random.choice(len(a),c,replace=False)
+    taus = np.linspace(1e-3, 1e4, c)
+    a[idx, :] = taus[:,None]*a[idx, :]
     outlierness = np.zeros((a.shape[0]))
     outlierness[idx] = 1
     return a, outlierness>0
@@ -52,6 +54,13 @@ def contaminate_dataset(a, perc):
 def mislabelled(n, mislabelling, labels):
     a,b = split(n, mislabelling)
     return np.hstack([np.random.permutation(np.hstack([i*np.ones((b)), labels[np.random.randint(0, len(labels), (a))]])) for i in labels])
+
+def mislabelled_irregular(a, mislabelling):
+    labels = a.copy()
+    u = np.unique(a)
+    idx = np.random.choice(len(labels),int(np.floor(len(labels)*mislabelling)),replace=False)
+    labels[idx] = np.random.choice(u, len(labels[idx]), replace=True)
+    return labels
 
 def flip_bits(a, perc):
     idx = np.random.choice(len(a),int(np.floor(len(a)*perc)),replace=False)
