@@ -1,14 +1,6 @@
 import numpy as np
-import random 
 import pandas as pd
-import os
-import time
-import csv 
-import warnings
-from dataset_utils import *
-
-# MATH and STATS:
-import math
+import random, os, time, csv, warnings, math
 from scipy import stats, special, optimize, spatial
 
 def t_EM_e_step(D, dof, mu, cov):

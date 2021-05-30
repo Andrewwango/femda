@@ -1,9 +1,12 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from import_subset_datasets import *
-from clustering_accuracy import acc
+from matplotlib.transforms import Bbox
+from preprocess_utils import *
+from postprocess_utils import *
 from sklearn import metrics # AMII and ARI
-from math import ceil
+import math, umap
+from plotnine import *
+from plotnine.data import *
 
 def lda_grid(em, mapper):
     AA, BB = np.meshgrid(np.linspace(em.A.min(), em.A.max(), 50),
@@ -83,7 +86,7 @@ def plot_models(X, y, X_test, models, percent_outliers=0, lims=[[-10,10],[-10,10
     many = (type(models) is tuple or type(models) is list) and len(models)>1
     models = models if many else [models]
     cols = 5
-    rows = 2*ceil(len(models)/cols)
+    rows = 2*math.ceil(len(models)/cols)
     fig, axs = plt.subplots(rows, cols, figsize=(cols*4,rows*4)) if many else plt.subplots(1,2, figsize=(8,4))
     axs = axs if many else axs[:,None]
     for i,model in enumerate(models):
@@ -112,6 +115,7 @@ def box_plot(result_book, algos=None, measures=None, e_loc_lims=None, e_sc_lims=
     
     # result_book: [algos, measures, runs]
     sbsize = (2,3) if result_book.shape[1] == 6 else (2,2)
+    #if 
     sbmap = {0: [1,0], 1: [0,0], 2:[0,1], 3:[0,2], 4:[1,1], 5:[1,2]} if result_book.shape[1] == 6 else {0: [1,1], 1: [0,0], 2:[0,1], 3:[1,0]}
     fig,axs = plt.subplots(*sbsize, figsize=(4*len(measures)/2,4*2))
     
@@ -132,8 +136,27 @@ def box_plot(result_book, algos=None, measures=None, e_loc_lims=None, e_sc_lims=
         i = np.where(["estimation" in k for k in measures])[0][1]
         m,n = sbmap[i]
         axs[m,n].set_ylim(e_sc_lims)    
-    fig.tight_layout()
+    fig.tight_layout(pad=2.0)
+    extents = []
+    for i in range(len(measures)):
+        m,n = sbmap[i]
+        extents.append(full_extent(axs[m,n]).transformed(fig.dpi_scale_trans.inverted()))
+    return fig, extents
+
+def full_extent(ax, pad=0.05):
+    ax.figure.canvas.draw()
+    items = ax.get_xticklabels() #+ ax.get_yticklabels()
+    items += [ax] #ax.get_xaxis().get_label()
+    items += [ax.get_yaxis().get_label()]
+    bbox = Bbox.union([item.get_window_extent() for item in items])
+
+    return bbox.expanded(1.0 + pad, 1.0 + pad)
+
+def save_subplots(fn, figure, extents, folder='images', extent_expansion=1, ext='pdf'):
+    for i,extent in enumerate(extents):
+        figure.savefig('{0}/{1}{2}.{3}'.format(folder, fn, i, ext), bbox_inches=extent.expanded(extent_expansion, extent_expansion))
     
+
 def bar_plot(ax, data, labels, colors=None, total_width=0.8, single_width=1, legend=True):
     """Draws a bar plot with multiple bars per data point.
 
@@ -199,4 +222,17 @@ def bar_plot(ax, data, labels, colors=None, total_width=0.8, single_width=1, leg
     # Draw legend if we need
     if legend:
         ax.legend(bars, data.keys())
-       
+
+def plot_fashion_mnist(features, labels, name):
+    fashionmnist_cats={0 :"T-shirt/top",1 :"Trouser",2 :"Pullover",3 :"Dress",4 :"Coat",5 :"Sandal",6 :"Shirt",7 :"Sneaker",8 :"Bag",9 :"Ankle boot"}
+    
+    mapper = umap.UMAP(metric='euclidean')
+    embedding = mapper.fit_transform(features)
+
+    label = pd.Series(labels)
+    em = pd.DataFrame(embedding, columns=['A','B']) 
+    em['label'] = pd.DataFrame(np.vectorize(fashionmnist_cats.get)(label))#label.astype(str)
+    gg = ggplot(aes(x='A', y='B', color='label'), data=em)+geom_point()+ scale_color_discrete(guide=guide_legend())+ labs(x = "", y = "") 
+    gg.save(name, dpi=300)
+    #print(gg)
+    return gg

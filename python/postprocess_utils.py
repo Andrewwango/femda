@@ -46,6 +46,33 @@ def evaluate_estimators(model, true_means, true_covs):
     true_covs_list = [true_covs[key] for key in sorted(true_covs.keys())]
     return errors_means(true_means_list, means), errors_covs(true_covs_list, covs)
 
+def evaluate_all(models, true_means, true_covs, plot=True, ret=False):  
+    models = models if type(models) is not dict else list(models.values())
+    labels = [type(model).__name__ for model in models]
+    all_estimator_errors = []
+    for model in models:
+        #print(type(model).__name__)
+        all_estimator_errors.append(evaluate_estimators(model, true_means, true_covs))
+    all_estimator_errors = np.array(all_estimator_errors)
+    
+    data_means_errors = {}
+    data_covs_errors = {}
+    for k in range(len(all_estimator_errors[0,0])):
+        data_means_errors[str(k)] = all_estimator_errors[:,0,k]
+        data_covs_errors[str(k)] = all_estimator_errors[:,1,k]
+    
+    if ret:
+        resultats = np.zeros((len(models), 2))
+        resultats[:,0] = np.median(np.vstack(data_means_errors.values()), axis=0)
+        resultats[:,1] = np.median(np.vstack(data_covs_errors.values()), axis=0)
+        return resultats
+    
+    #print(data_means_errors, data_covs_errors, labels)
+    if plot:
+        fig,(ax1,ax2) = plt.subplots(2,1)
+        bar_plot(ax1, data_means_errors, labels)
+        bar_plot(ax2, data_covs_errors, labels)
+
 def acc(y_true, y_pred):
     """
     Calculate clustering accuracy. Require scikit-learn installed

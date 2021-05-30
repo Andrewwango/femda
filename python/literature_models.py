@@ -1,11 +1,8 @@
 import numpy as np
-import random 
 import pandas as pd
-import os
-import time
-import csv 
-import warnings
-from dataset_utils import *
+import random, os, time, csv, warnings
+from preprocess_utils import *
+from postprocess_utils import *
 from fit import *
 
 # MATH and STATS:
@@ -270,6 +267,7 @@ class RGQDA(GQDA):
         return [MVE.slots['center'], MVE.slots['cov']]
 
     def estimate_MCD(self, X):
+        print("estimating...")
         frame = self._get_r_frame(X)
         MCD = rrcov.CovMcd(frame, alpha=0.5)
         return [MCD.slots['center'], MCD.slots['cov']]   
