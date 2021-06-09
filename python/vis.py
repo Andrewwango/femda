@@ -4,7 +4,7 @@ from matplotlib.transforms import Bbox
 from preprocess_utils import *
 from postprocess_utils import *
 from sklearn import metrics # AMII and ARI
-import math, umap
+import math
 from plotnine import *
 from plotnine.data import *
 
@@ -224,6 +224,7 @@ def bar_plot(ax, data, labels, colors=None, total_width=0.8, single_width=1, leg
         ax.legend(bars, data.keys())
 
 def plot_fashion_mnist(features, labels, name):
+    import umap
     fashionmnist_cats={0 :"T-shirt/top",1 :"Trouser",2 :"Pullover",3 :"Dress",4 :"Coat",5 :"Sandal",6 :"Shirt",7 :"Sneaker",8 :"Bag",9 :"Ankle boot"}
     
     mapper = umap.UMAP(metric='euclidean')
