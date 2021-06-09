@@ -108,9 +108,9 @@ def normalise(a):
 def normalise_means(means_dict):
     return dict([(k,v/np.linalg.norm(v)) for (k,v) in means_dict.items()])
 
-def normalise_centered(X, y):
+def normalise_centered(X, y, mean_estimator=fit_t):
     X_copy = X.copy()
     for k in np.unique(y):
-        mean = fit_t(X[y==k])[0]
+        mean = mean_estimator(X[y==k])[0]
         X_copy[y==k] = normalise(X[y==k]-mean)+mean
     return X_copy

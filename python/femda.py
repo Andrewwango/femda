@@ -128,7 +128,7 @@ class FEMDA_N(FEMDA):
     def __init__(self, method='distributional'):
         super().__init__(method)
     def fit(self, X,y):
-        #X_n = 
+        X_n = normalise_centered(X, y, mean_estimator=lambda x:LDA_FEM_base().FEM_estimate(x, self.normalisation_method))
         super().fit(X_n,y)
 
 class FEM_predictor(FEM_classification):

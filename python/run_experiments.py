@@ -67,8 +67,8 @@ def run_algorithms(X, y, X_test, y_test, slow=True, percent_outliers=0, conf=Fal
     resultats[5,0] = time.time()-st 
     resultats[5,1:] = print_metrics(pd.Series(y_test), femdatest.predict(X_test, percent_outliers), conf=conf, verbose=verbose, ret=True)
     
-    print("FEMDA with p/trace")
-    femda_ntest = FEMDA()
+    print("FEMDA pre-normalised")
+    femda_ntest = FEMDA_N()
     femda_ntest.normalisation_method = 1
     st = time.time()
     femda_ntest.fit(X, pd.Series(y))
