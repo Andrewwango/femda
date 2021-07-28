@@ -41,16 +41,16 @@ def run_algorithms(X, y, X_test, y_test, slow=True, percent_outliers=0, conf=Fal
     print("RQDA-MCD")
     rqdamcdtest = RGQDA('MCD')
     st = time.time()
-    rqdamcdtest.fit(X, pd.Series(y), c=1)
-    resultats[2,0] = time.time()-st 
-    resultats[2,1:] = print_metrics(pd.Series(y_test), rqdamcdtest.predict(X_test, percent_outliers), conf=conf, verbose=verbose, ret=True)
+    #rqdamcdtest.fit(X, pd.Series(y), c=1)
+    #resultats[2,0] = time.time()-st 
+    #resultats[2,1:] = print_metrics(pd.Series(y_test), rqdamcdtest.predict(X_test, percent_outliers), conf=conf, verbose=verbose, ret=True)
     
     print("RGQDA-MCD")
     rgqdamcdtest = RGQDA('MCD')
     st = time.time()
-    rgqdamcdtest.fit(X, pd.Series(y))
-    resultats[3,0] = time.time()-st 
-    resultats[3,1:] = print_metrics(pd.Series(y_test), rgqdamcdtest.predict(X_test, percent_outliers), conf=conf, verbose=verbose, ret=True)   
+    #rgqdamcdtest.fit(X, pd.Series(y))
+    #resultats[3,0] = time.time()-st 
+    #resultats[3,1:] = print_metrics(pd.Series(y_test), rgqdamcdtest.predict(X_test, percent_outliers), conf=conf, verbose=verbose, ret=True)   
     
     print("t-QDA")
     t_qdatest = t_QDA(method='distributional')
