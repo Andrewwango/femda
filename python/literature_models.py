@@ -62,9 +62,9 @@ class LDA():
     def _kth_likelihood(self, k):
         return stats.multivariate_normal(mean=self.means[:,k], cov=self.covariances[k,:,:])
     
-    def _posteriors(self, X): ##TODO: should be renamed likelihoods
+    def _posteriors(self, X): ##TODO: should be renamed log_likelihoods
         r = [self._kth_likelihood(k).pdf(X) for k in range(self.K)]
-        return np.array(r)
+        return np.log(np.array(r))
        
     def estimate_parameters(self, X): #NxM -> [1xM, MxM]
         return [X.mean(axis=0), np.cov(X.T)]
@@ -90,7 +90,7 @@ class LDA():
                 if self.pool_covs else self.covariances 
                     
         self.priors = n / n.sum()
-        print(self.priors, n)
+        #print(self.priors, n)
 
         assert(n.sum() == X.shape[0])
         assert(self.M == self.covariances.shape[2])
@@ -114,11 +114,13 @@ class LDA():
             dk = self._dk_from_method(X)
         except np.linalg.LinAlgError:
             return None
-        
-        dk = dk * self.priors[:, None]
+        #print("Before priors", dk)
+        #self.priors = np.array([1/6, 1/6, 1/6, 1/6, 0.0001, 1/6, 1/6])
+        dk = dk + np.log(self.priors[:, None])
+        #print("After priors", dk)
         #check priors fitted in all algos
-        
-        y = self.ks[dk.argmax(axis=0)]
+        #print(self.priors)
+        y = self.ks[np.nanargmax(dk, axis=0)]
         return label_outliers(X, y, self.means, self.covariances, thres=percent_outliers)
        
     def predict_proba(self, X):

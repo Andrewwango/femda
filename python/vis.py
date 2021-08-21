@@ -156,7 +156,16 @@ def save_subplots(fn, figure, extents, folder='images', extent_expansion=1, ext=
     for i,extent in enumerate(extents):
         figure.savefig('{0}/{1}{2}.{3}'.format(folder, fn, i, ext), bbox_inches=extent.expanded(extent_expansion, extent_expansion))
     
-
+def plot_tQDA_vs_FEMDA(result_book, xaxis=None, ylim=None):
+    fig,ax = plt.subplots()
+    xaxis = xaxis if xaxis is not None else np.arange(result_book.shape[2])
+    ax.plot(xaxis, result_book[-3,1,:], label='tQDA')
+    ax.plot(xaxis, result_book[-2,1,:], label='femda')
+    ax.set_ylim(ylim)
+    ax.set_xlabel("n_pca")
+    ax.set_ylabel("Accuracy")
+    ax.legend()
+    
 def bar_plot(ax, data, labels, colors=None, total_width=0.8, single_width=1, legend=True):
     """Draws a bar plot with multiple bars per data point.
 
