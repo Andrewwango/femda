@@ -19,7 +19,7 @@ SpatialNP = importr('SpatialNP')
 LaplacesDemon = importr('LaplacesDemon')
 
 
-class LDA(BaseEstimator, ClassifierMixin, LinearClassifierMixin):
+class LDA(BaseEstimator, LinearClassifierMixin):
     # Attributes:
     # priors: 1xK
     # coefficients: KxM
@@ -27,11 +27,11 @@ class LDA(BaseEstimator, ClassifierMixin, LinearClassifierMixin):
     # parameters
     # means_ : MxK
     # covariance_: KxMxM
-    def __init__(self, method='distributional'):
+    def __init__(self, method='distributional', pool_covs=True, fudge=1):
         self.method = method
 
-        self._pool_covs = True
-        self._fudge = 1
+        self.pool_covs = pool_covs
+        self.fudge = fudge
     
     def _bose_k(self):
         return np.array([0.5])
@@ -47,7 +47,7 @@ class LDA(BaseEstimator, ClassifierMixin, LinearClassifierMixin):
         return np.vstack(ret) if ki is None else ret[0]
     
     def _general_discriminants(self, X): #KxN
-        return -0.5*np.log(np.linalg.det(self.covariance_))[:,None] * self._fudge - self._bose_k()[:,None] * self._mahalanobis(X)
+        return -0.5*np.log(np.linalg.det(self.covariance_))[:,None] * self.fudge - self._bose_k()[:,None] * self._mahalanobis(X)
     
     def _kth_likelihood(self, k): # non-log likelihood
         return stats.multivariate_normal(mean=self.means_[:,k], cov=self.covariance_[k,:,:])
@@ -66,22 +66,24 @@ class LDA(BaseEstimator, ClassifierMixin, LinearClassifierMixin):
             return self._general_discriminants(X)
 
     def fit(self, X, y):
+        X, y = self._validate_data(X, y, ensure_min_samples=2, estimator=self,
+                                   dtype=[np.float64, np.float32])
         st=time.time()
 
         self._ks = np.unique(y) #1xK
         self._K = len(self._ks)
         self._M = X.shape[1]
-        classes = [X[np.where(y == k), :][0,:,:] for k in self._ks] #Kxn_kxM
-        n = np.array([c.shape[0] for c in classes])
+        self.X_classes = [X[np.where(y == k), :][0,:,:] for k in self._ks] #Kxn_kxM
+        n = np.array([c.shape[0] for c in self.X_classes])
         
         try:
-            self._parameters = [self._estimate_parameters(c) for c in classes]
+            self._parameters_ = [self._estimate_parameters(c) for c in self.X_classes]
         except np.linalg.LinAlgError:
             return None
-        self.means_ = np.array([param[0] for param in self._parameters]).T
-        self.covariance_ = np.array([param[1] for param in self._parameters])
+        self.means_ = np.array([param[0] for param in self._parameters_]).T
+        self.covariance_ = np.array([param[1] for param in self._parameters_])
         self.covariance_ = np.repeat(np.sum(n[:,None,None] * self.covariance_, axis=0)[None,:],self._K,axis=0) / n.sum() \
-                if self._pool_covs else self.covariance_ 
+                if self.pool_covs else self.covariance_ 
                     
         self.priors_ = n / n.sum()
         #print(self.priors, n)
@@ -90,11 +92,10 @@ class LDA(BaseEstimator, ClassifierMixin, LinearClassifierMixin):
         assert(self._M == self.covariance_.shape[2])
         assert (np.allclose(self.priors_.sum(), 1))
         #print("Fitting time", time.time()-st)
-        return classes ##TODO: return estimator!!
+        return self
                     
     def predict(self, X, percent_outliers=0):
-        #obtain likelihood
-        if self._parameters is None:
+        if self._parameters_ is None:
             return None
         try:
             dk = self._dk_from_method(X)
@@ -146,9 +147,9 @@ class t_LDA(LDA):
             
     def fit(self, X,y):
         super().fit(X,y)
-        if self._parameters is None:
+        if self._parameters_ is None:
             return None
-        self.dofs = np.array([param[2] for param in self._parameters]).squeeze()
+        self.dofs = np.array([param[2] for param in self._parameters_]).squeeze()
 
 ## t-QDA
 class t_QDA(t_LDA):
@@ -163,21 +164,21 @@ class GQDA(QDA):
         self.c = None
     
     def fit(self, X,y,c=None):
-        classes = super().fit(X,y) #Kx[n_k, M]
-        if self._parameters is None:
+        super().fit(X,y) #Kx[n_k, M]
+        if self._parameters_ is None:
             return None
         
         if c is not None:
             self.c = c
             return 
             
-        uijs = [np.zeros((classes[k].shape[0], self._K, self._K)) for k in range(self._K)] #Kx[n_kxIxJ]
+        uijs = [np.zeros((self.X_classes[k].shape[0], self._K, self._K)) for k in range(self._K)] #Kx[n_kxIxJ]
         sij = np.zeros((self._K,self._K))
         logdets = np.log(np.linalg.det(self.covariance_)) #K,  
         for i in range(self._K):
             for j in range(self._K):
-                dij_on_i = self._mahalanobis(classes[i], ki=j) - self._mahalanobis(classes[i], ki=i) #Kxn_i
-                dij_on_j = self._mahalanobis(classes[j], ki=j) - self._mahalanobis(classes[j], ki=i) #Kxn_j
+                dij_on_i = self._mahalanobis(self.X_classes[i], ki=j) - self._mahalanobis(self.X_classes[i], ki=i) #Kxn_i
+                dij_on_j = self._mahalanobis(self.X_classes[j], ki=j) - self._mahalanobis(self.X_classes[j], ki=i) #Kxn_j
                 sij[i,j] = logdets[j] - logdets[i]
                 
                 
@@ -200,12 +201,12 @@ class GQDA(QDA):
                     if i==j: continue
                     p = uijs[i][:, i,j]
                     to_app = p > -c if sij[i,j]>0 else p < -c 
-                    Rijc.append(classes[i][to_app])
+                    Rijc.append(self.X_classes[i][to_app])
                 Rijc = np.vstack(Rijc)
                 Ric = np.unique(Rijc, axis=0)
                 #print(Ric.shape, Rijc.shape)
                 lenRic = Ric.shape[0]
-                MCic = classes[i].shape[0] - lenRic
+                MCic = self.X_classes[i].shape[0] - lenRic
                 #print(MCic, Ric.shape)
                 MCc[e] += MCic
                 
