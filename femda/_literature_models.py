@@ -1,9 +1,7 @@
 import numpy as np
 import pandas as pd
 import random, os, time, csv, warnings
-from preprocess_utils import *
-from postprocess_utils import *
-from fit import *
+from ._algo_utils import fit_t, label_outliers
 
 # MATH and STATS:
 import math
@@ -295,5 +293,4 @@ class RGQDA(GQDA):
         M = SpatialNP.mvhuberM(frame)
         #print(list(M))
         return list(M)   
-
 

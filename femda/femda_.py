@@ -1,5 +1,21 @@
-from fem import FEM
-from literature_models import *
+import numpy as np
+import math
+from ._fem import FEM
+from ._algo_utils import fit_t_dof, fit_t
+from ._literature_models import LDA, t_LDA
+
+def normalise(a):
+    return (a.T/np.linalg.norm(a, axis=1)).T
+
+def normalise_means(means_dict):
+    return dict([(k,v/np.linalg.norm(v)) for (k,v) in means_dict.items()])
+
+def normalise_centered(X, y, mean_estimator=fit_t):
+    X_copy = X.copy()
+    for k in np.unique(y):
+        mean = mean_estimator(X[y==k])[0]
+        X_copy[y==k] = normalise(X[y==k]-mean)+mean
+    return X_copy
 
 class FEM_classification(FEM):
     def fit(self, X):
@@ -141,4 +157,4 @@ class FEM_predictor(FEM_classification):
         self.override_params(DA_means.T, DA_covs)
 
         return super().predict(X_new, thres=0)
-        
+
