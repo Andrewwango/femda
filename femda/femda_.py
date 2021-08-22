@@ -119,9 +119,9 @@ class FEMDA(QDA_FEM):
         super().__init__(method)
     def _posteriors2(self, X): #->KxN
         #print("hello")
-        FEM = FEM_classification(self.K, rand_initialization=True)
+        FEM = FEM_classification(self._K, rand_initialization=True)
         FEM._initialize(X)
-        FEM.override_params(self.means.T, self.covariances)
+        FEM.override_params(self.means_.T, self.covariance_)
         FEM.update_tau(X)
         #print(FEM.K)
         cond_prob = FEM._e_step(X)
@@ -133,10 +133,10 @@ class FEMDA(QDA_FEM):
     
     def _posteriors(self, X):
         N,p = X.shape
-        log_maha = np.zeros((self.K, N))
-        for k in range(self.K):
-            log_maha[k, :] = np.log(self.simple_mahalanobis(X, self.means[:,k], self.covariances[k,:,:]))
-        _,logdets = np.linalg.slogdet(self.covariances)
+        log_maha = np.zeros((self._K, N))
+        for k in range(self._K):
+            log_maha[k, :] = np.log(self.simple_mahalanobis(X, self.means_[:,k], self.covariance_[k,:,:]))
+        _,logdets = np.linalg.slogdet(self.covariance_)
         pik = -0.5 * (p * log_maha + logdets[:,None])
         return pik
 

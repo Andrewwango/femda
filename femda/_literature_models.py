@@ -6,6 +6,7 @@ from ._algo_utils import fit_t, label_outliers
 import math
 from scipy import stats, special, optimize, spatial
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.linear_model._base import LinearClassifierMixin
 
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
@@ -18,94 +19,82 @@ SpatialNP = importr('SpatialNP')
 LaplacesDemon = importr('LaplacesDemon')
 
 
-class LDA(BaseEstimator, ClassifierMixin):
+class LDA(BaseEstimator, ClassifierMixin, LinearClassifierMixin):
     # Attributes:
     # priors: 1xK
     # coefficients: KxM
     # intercepts: #1xK
     # parameters
-    # means : MxK
-    # covariances: KxMxM
+    # means_ : MxK
+    # covariance_: KxMxM
     def __init__(self, method='distributional'):
         self.method = method
 
         self._pool_covs = True
         self._fudge = 1
     
-    def _discriminants(self, X): #NxM -> KxN
-        if (self.coefficients is None) or (self.intercepts is None):
-            self.calculate_discriminant_params()
-        assert((self.priors is not None) and (self.coefficients is not None) and (self.intercepts is not None))
-        return self.coefficients.dot(X.T) + (self.intercepts + np.log(self.priors))[None,:].T
-    
     def _bose_k(self):
         return np.array([0.5])
     
     def _mahalanobis(self, X, ki=None): #NxM -> KxN
         ret = []
-        r = range(self.K) if ki is None else [ki]
+        r = range(self._K) if ki is None else [ki]
         for k in r:
-            m = X - self.means[:,k]
-            kth_maha = np.array(list(map(lambda d: d @ np.linalg.inv(self.covariances)[k,:,:] @ d[:,None], m))).T
+            m = X - self.means_[:,k]
+            kth_maha = np.array(list(map(lambda d: d @ np.linalg.inv(self.covariance_)[k,:,:] @ d[:,None], m))).T
             #kth_maha = np.diag(m @ np.linalg.inv(self.covariances)[k,:,:] @ m.T)]
             ret += [kth_maha]
         return np.vstack(ret) if ki is None else ret[0]
     
     def _general_discriminants(self, X): #KxN
-        return -0.5*np.log(np.linalg.det(self.covariances))[:,None] * self._fudge - self._bose_k()[:,None] * self._mahalanobis(X)
+        return -0.5*np.log(np.linalg.det(self.covariance_))[:,None] * self._fudge - self._bose_k()[:,None] * self._mahalanobis(X)
     
-    def _kth_likelihood(self, k):
-        return stats.multivariate_normal(mean=self.means[:,k], cov=self.covariances[k,:,:])
+    def _kth_likelihood(self, k): # non-log likelihood
+        return stats.multivariate_normal(mean=self.means_[:,k], cov=self.covariance_[k,:,:])
     
-    def _posteriors(self, X): ##TODO: should be renamed log_likelihoods
-        r = [self._kth_likelihood(k).pdf(X) for k in range(self.K)]
+    def _log_likelihoods(self, X):
+        r = [self._kth_likelihood(k).pdf(X) for k in range(self._K)]
         return np.log(np.array(r))
        
-    def estimate_parameters(self, X): #NxM -> [1xM, MxM]
+    def _estimate_parameters(self, X): #NxM -> [1xM, MxM]
         return [X.mean(axis=0), np.cov(X.T)]
-    
-    def calculate_discriminant_params(self):
-        cov_inv = np.linalg.inv(self.covariances[0,:,:])
-        self.coefficients = self.means.T.dot(cov_inv)
-        self.intercepts = -0.5*np.diag(self.means.T.dot(cov_inv.dot(self.means)))  
-    
+
+    def _dk_from_method(self, X):
+        if self.method=='distributional':
+            return self._log_likelihoods(X)
+        elif self.method=='generalised':
+            return self._general_discriminants(X)
+
     def fit(self, X, y):
         st=time.time()
-        self.ks = np.unique(y) #1xK
-        self.K = len(self.ks)
-        self.M = X.shape[1]
-        classes = [X[np.where(y == k), :][0,:,:] for k in self.ks] #Kxn_kxM
+
+        self._ks = np.unique(y) #1xK
+        self._K = len(self._ks)
+        self._M = X.shape[1]
+        classes = [X[np.where(y == k), :][0,:,:] for k in self._ks] #Kxn_kxM
         n = np.array([c.shape[0] for c in classes])
         
         try:
-            self.parameters = [self.estimate_parameters(c) for c in classes]
+            self._parameters = [self._estimate_parameters(c) for c in classes]
         except np.linalg.LinAlgError:
             return None
-        self.means = np.array([param[0] for param in self.parameters]).T
-        self.covariances = np.array([param[1] for param in self.parameters])
-        self.covariances = np.repeat(np.sum(n[:,None,None] * self.covariances, axis=0)[None,:],self.K,axis=0) / n.sum() \
-                if self._pool_covs else self.covariances 
+        self.means_ = np.array([param[0] for param in self._parameters]).T
+        self.covariance_ = np.array([param[1] for param in self._parameters])
+        self.covariance_ = np.repeat(np.sum(n[:,None,None] * self.covariance_, axis=0)[None,:],self._K,axis=0) / n.sum() \
+                if self._pool_covs else self.covariance_ 
                     
-        self.priors = n / n.sum()
+        self.priors_ = n / n.sum()
         #print(self.priors, n)
 
         assert(n.sum() == X.shape[0])
-        assert(self.M == self.covariances.shape[2])
-        assert (np.allclose(self.priors.sum(), 1))
+        assert(self._M == self.covariance_.shape[2])
+        assert (np.allclose(self.priors_.sum(), 1))
         #print("Fitting time", time.time()-st)
-        return classes
-    
-    def _dk_from_method(self, X):
-        if self.method=='distributional':
-            return self._posteriors(X)
-        elif self.method=='coeffs':
-            return self._discriminants(X)
-        elif self.method=='generalised':
-            return self._general_discriminants(X)
-                
+        return classes ##TODO: return estimator!!
+                    
     def predict(self, X, percent_outliers=0):
         #obtain likelihood
-        if self.parameters is None:
+        if self._parameters is None:
             return None
         try:
             dk = self._dk_from_method(X)
@@ -113,16 +102,16 @@ class LDA(BaseEstimator, ClassifierMixin):
             return None
         #print("Before priors", dk)
         #self.priors = np.array([1/6, 1/6, 1/6, 1/6, 0.0001, 1/6, 1/6])
-        dk = dk + np.log(self.priors[:, None])
+        dk = dk + np.log(self.priors_[:, None])
         #print("After priors", dk)
         #check priors fitted in all algos
         #print(self.priors)
-        y = self.ks[np.nanargmax(dk, axis=0)]
-        return label_outliers(X, y, self.means, self.covariances, thres=percent_outliers)
+        y = self._ks[np.nanargmax(dk, axis=0)]
+        return label_outliers(X, y, self.means_, self.covariance_, thres=percent_outliers)
        
     def predict_proba(self, X):
         dk = self._dk_from_method(X)
-        if self.method!='distributional':
+        if self.method != 'distributional':
             dk = np.exp(dk)
         return (dk/dk.sum(axis=0)).T
     
@@ -140,26 +129,26 @@ class t_LDA(LDA):
         self.dofs = None #1xK
     
     def _kth_likelihood(self, k):
-        return stats.multivariate_t(loc=self.means[:,k], shape=self.covariances[k,:,:], df=self.dofs[k])
+        return stats.multivariate_t(loc=self.means_[:,k], shape=self.covariance_[k,:,:], df=self.dofs[k])
     
     def estimate_parameters(self, X):
         return fit_t(X)
     
     def _bose_k(self):
-        return (0.5*(1 + self.M/self.dofs))
+        return (0.5*(1 + self._M/self.dofs))
     
     def _discriminants(self, X): #NxM -> KxN
         return None
         
     def _general_discriminants(self, X):
         v = self.dofs
-        return super()._general_discriminants(X) + (special.gammaln((v+self.M)/2) - special.gammaln(v/2) - 0.5*self.M*np.log(v))[:,None]
+        return super()._general_discriminants(X) + (special.gammaln((v+self._M)/2) - special.gammaln(v/2) - 0.5*self._M*np.log(v))[:,None]
             
     def fit(self, X,y):
         super().fit(X,y)
-        if self.parameters is None:
+        if self._parameters is None:
             return None
-        self.dofs = np.array([param[2] for param in self.parameters]).squeeze()
+        self.dofs = np.array([param[2] for param in self._parameters]).squeeze()
 
 ## t-QDA
 class t_QDA(t_LDA):
@@ -175,18 +164,18 @@ class GQDA(QDA):
     
     def fit(self, X,y,c=None):
         classes = super().fit(X,y) #Kx[n_k, M]
-        if self.parameters is None:
+        if self._parameters is None:
             return None
         
         if c is not None:
             self.c = c
             return 
             
-        uijs = [np.zeros((classes[k].shape[0], self.K, self.K)) for k in range(self.K)] #Kx[n_kxIxJ]
-        sij = np.zeros((self.K,self.K))
-        logdets = np.log(np.linalg.det(self.covariances)) #K,  
-        for i in range(self.K):
-            for j in range(self.K):
+        uijs = [np.zeros((classes[k].shape[0], self._K, self._K)) for k in range(self._K)] #Kx[n_kxIxJ]
+        sij = np.zeros((self._K,self._K))
+        logdets = np.log(np.linalg.det(self.covariance_)) #K,  
+        for i in range(self._K):
+            for j in range(self._K):
                 dij_on_i = self._mahalanobis(classes[i], ki=j) - self._mahalanobis(classes[i], ki=i) #Kxn_i
                 dij_on_j = self._mahalanobis(classes[j], ki=j) - self._mahalanobis(classes[j], ki=i) #Kxn_j
                 sij[i,j] = logdets[j] - logdets[i]
@@ -205,9 +194,9 @@ class GQDA(QDA):
         MCc = np.zeros((len(T)))
         for e,c in enumerate(T):
             
-            for i in range(self.K):
+            for i in range(self._K):
                 Rijc = []
-                for j in range(self.K):
+                for j in range(self._K):
                     if i==j: continue
                     p = uijs[i][:, i,j]
                     to_app = p > -c if sij[i,j]>0 else p < -c 
