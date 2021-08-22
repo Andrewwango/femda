@@ -3,9 +3,9 @@ import pandas as pd
 import random, os, time, csv, warnings
 from ._algo_utils import fit_t, label_outliers
 
-# MATH and STATS:
 import math
 from scipy import stats, special, optimize, spatial
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
@@ -18,22 +18,19 @@ SpatialNP = importr('SpatialNP')
 LaplacesDemon = importr('LaplacesDemon')
 
 
-
-## Custom LDA with Gaussians
-class LDA():
+class LDA(BaseEstimator, ClassifierMixin):
+    # Attributes:
+    # priors: 1xK
+    # coefficients: KxM
+    # intercepts: #1xK
+    # parameters
+    # means : MxK
+    # covariances: KxMxM
     def __init__(self, method='distributional'):
         self.method = method
-        self.K = None
-        self.M = None
-        self.ks = None #1xK
-        self.priors = None #1xK
-        self.coefficients = None #KxM
-        self.intercepts = None #1xK
-        self.parameters = None
-        self.means = None #MxK
-        self.covariances =  None #KxMxM
-        self.pool_covs = True
-        self.fudge = 1
+
+        self._pool_covs = True
+        self._fudge = 1
     
     def _discriminants(self, X): #NxM -> KxN
         if (self.coefficients is None) or (self.intercepts is None):
@@ -55,7 +52,7 @@ class LDA():
         return np.vstack(ret) if ki is None else ret[0]
     
     def _general_discriminants(self, X): #KxN
-        return -0.5*np.log(np.linalg.det(self.covariances))[:,None] * self.fudge - self._bose_k()[:,None] * self._mahalanobis(X)
+        return -0.5*np.log(np.linalg.det(self.covariances))[:,None] * self._fudge - self._bose_k()[:,None] * self._mahalanobis(X)
     
     def _kth_likelihood(self, k):
         return stats.multivariate_normal(mean=self.means[:,k], cov=self.covariances[k,:,:])
@@ -74,7 +71,9 @@ class LDA():
     
     def fit(self, X, y):
         st=time.time()
-        self.ks = np.unique(y); self.K = len(self.ks); self.M = X.shape[1]
+        self.ks = np.unique(y) #1xK
+        self.K = len(self.ks)
+        self.M = X.shape[1]
         classes = [X[np.where(y == k), :][0,:,:] for k in self.ks] #Kxn_kxM
         n = np.array([c.shape[0] for c in classes])
         
@@ -85,7 +84,7 @@ class LDA():
         self.means = np.array([param[0] for param in self.parameters]).T
         self.covariances = np.array([param[1] for param in self.parameters])
         self.covariances = np.repeat(np.sum(n[:,None,None] * self.covariances, axis=0)[None,:],self.K,axis=0) / n.sum() \
-                if self.pool_covs else self.covariances 
+                if self._pool_covs else self.covariances 
                     
         self.priors = n / n.sum()
         #print(self.priors, n)
@@ -125,7 +124,8 @@ class LDA():
         dk = self._dk_from_method(X)
         if self.method!='distributional':
             dk = np.exp(dk)
-        return (dk/dk.sum(axis=0)).T   
+        return (dk/dk.sum(axis=0)).T
+    
 
 ## Custom QDA
 class QDA(LDA):

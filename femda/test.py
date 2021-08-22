@@ -1,0 +1,1 @@
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
