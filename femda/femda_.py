@@ -1,5 +1,7 @@
 import numpy as np
 import math
+
+from sklearn.utils.validation import check_is_fitted
 from ._fem import FEM
 from ._algo_utils import fit_t_dof, fit_t
 from ._literature_models import LDA, t_LDA

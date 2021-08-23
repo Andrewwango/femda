@@ -234,7 +234,6 @@ class FEM():
             convergence_fp = False
             ite_fp = 1
             while not(convergence_fp) and ite_fp<self.max_iter_fp:
-                
                 inv_Sigma_fixed_point = np.linalg.inv(Sigma_fixed_point)
                 diff = X - mu_fixed_point             
                 sq_maha = (np.dot(diff, inv_Sigma_fixed_point) * diff).sum(1) # multiple quadratic form

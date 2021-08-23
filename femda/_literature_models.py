@@ -1,14 +1,14 @@
 import numpy as np
 import pandas as pd
-import random, os, time, csv, warnings
-from ._algo_utils import fit_t, label_outliers
+import random, os, time, csv, warnings, math
 
-import math
 from scipy import stats, special, optimize, spatial
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.linear_model._base import LinearClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
+
+from ._algo_utils import fit_t, label_outliers
 
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
@@ -71,7 +71,8 @@ class LDA(BaseEstimator, ClassifierMixin):
     def fit(self, X, y):
         X, y = check_X_y(X, y)
         X, y = self._validate_data(X, y, ensure_min_samples=2, estimator=self,
-                                   dtype=[np.float64, np.float32])
+                                   dtype=[np.float64, np.float32], ensure_min_features=2)
+
         st=time.time()
 
         self.classes_ = unique_labels(y) #1xK
@@ -80,17 +81,20 @@ class LDA(BaseEstimator, ClassifierMixin):
         self.X_classes_ = [X[np.where(y == k), :][0,:,:] for k in self.classes_] #Kxn_kxM
         n = np.array([c.shape[0] for c in self.X_classes_])
         
+        self.priors_ = n / n.sum()
+        #print(self.priors, n)
+        
         try:
             self.parameters_ = [self._estimate_parameters(c) for c in self.X_classes_]
         except np.linalg.LinAlgError:
-            return None
+            self.parameters_ = [[np.zeros(self._M), np.eye(self._M)] for c in self.X_classes_]
+
         self.means_ = np.array([param[0] for param in self.parameters_]).T
         self.covariance_ = np.array([param[1] for param in self.parameters_])
         self.covariance_ = np.repeat(np.sum(n[:,None,None] * self.covariance_, axis=0)[None,:],self._K,axis=0) / n.sum() \
                 if self.pool_covs else self.covariance_ 
                     
-        self.priors_ = n / n.sum()
-        #print(self.priors, n)
+
 
         assert(n.sum() == X.shape[0])
         assert(self._M == self.covariance_.shape[2])
@@ -98,8 +102,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         #print("Fitting time", time.time()-st)
         return self
 
-    def decision_function(self, X):
-        check_is_fitted(self)
+    def _decision_function(self, X):
+        check_is_fitted(self, ["means_", "covariance_", "priors_", "parameters_"])
         X = check_array(X)
 
         try:
@@ -114,15 +118,22 @@ class LDA(BaseEstimator, ClassifierMixin):
         #print(self.priors)
         return dk.T #return in standard sklearn shape NxK
 
+    def decision_function(self, X):
+        dk = self._decision_function(X)
+        if len(self.classes_) == 2:
+            return dk[:,1] - dk[:,0]
+        return dk #NxK
+
     def predict(self, X, percent_outliers=0):
-        y = self.classes_[np.nanargmax(self.decision_function(X), axis=1)]
+        dk = self._decision_function(X)
+        preds = np.nanargmax(dk, axis=1)# if len(self.classes_) != 2 else (dk > 0).astype(np.uint8)
+        y = self.classes_[preds]
         return label_outliers(X, y, self.means_, self.covariance_, thres=percent_outliers)
        
     def predict_proba(self, X):
-        dk = self.decision_function(X).T
-        if self.method != 'distributional':
-            dk = np.exp(dk)
-        return (dk/dk.sum(axis=0)).T
+        dk = self._decision_function(X)
+        likelihood = np.exp(dk - dk.max(axis=1)[:, np.newaxis])
+        return likelihood / likelihood.sum(axis=1)[:, np.newaxis]
     
 
 ## Custom QDA
