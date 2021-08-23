@@ -14,7 +14,12 @@ import matplotlib.pyplot as plt
 
 from experiments_utils import *
 from femda import *
-from femda._literature_models import *
+
+# For testing and experiments
+from femda._models_lda import LDA, QDA
+from femda._models_t_lda import t_LDA, t_QDA
+from femda._models_gqda import GQDA, RGQDA
+from femda._algo_utils import label_outliers
 
 
 

@@ -1,4 +1,4 @@
-import random, math
+import random, math, time
 import numpy as np
 import pandas as pd
 from scipy import linalg
@@ -9,7 +9,15 @@ from matplotlib import pyplot as plt
 from matplotlib.transforms import Bbox
 from plotnine import *
 from plotnine.data import *
+
 from femda import *
+# For testing and experiments
+from femda._models_lda import LDA, QDA
+from femda._models_t_lda import t_LDA, t_QDA
+from femda._models_gqda import GQDA, RGQDA
+from femda._algo_utils import label_outliers
+
+
 def import_subset(dataset, labels, selected_cat, n_pca, n_sample, pca=None):
     
     i = 1

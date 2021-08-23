@@ -97,7 +97,7 @@ class LDA(BaseEstimator, ClassifierMixin):
         try:
             dk = self._dk_from_method(X)
         except np.linalg.LinAlgError:
-            return None
+            dk = np.zeros((len(self.classes_), X.shape[0]))
         #print("Before priors", dk)
         #self.priors = np.array([1/6, 1/6, 1/6, 1/6, 0.0001, 1/6, 1/6])
         dk = dk + np.log(self.priors_[:, None])
@@ -114,6 +114,7 @@ class LDA(BaseEstimator, ClassifierMixin):
 
     def predict(self, X, percent_outliers=0):
         dk = self._decision_function(X)
+        #print(dk)
         preds = np.nanargmax(dk, axis=1)# if len(self.classes_) != 2 else (dk > 0).astype(np.uint8)
         y = self.classes_[preds]
         return label_outliers(X, y, self.means_, self.covariance_, thres=percent_outliers)

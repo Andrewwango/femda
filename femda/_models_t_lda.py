@@ -22,6 +22,8 @@ class t_LDA(LDA):
             
     def fit(self, X,y):
         super().fit(X,y)
+        if len(self.parameters_[0]) < 3:
+            self.parameters_ = [param + [200] for param in self.parameters_]
         self.dofs_ = np.array([param[2] for param in self.parameters_]).squeeze() #1xK
         return self
 
