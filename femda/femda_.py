@@ -4,25 +4,12 @@ from ._fem import FEM
 from ._algo_utils import fit_t_dof, fit_t
 from ._literature_models import LDA, t_LDA
 
-def _normalise(a):
-    return (a.T/np.linalg.norm(a, axis=1)).T
-
-def _normalise_means(means_dict):
-    return dict([(k,v/np.linalg.norm(v)) for (k,v) in means_dict.items()])
-
-def _normalise_centered(X, y, mean_estimator=fit_t):
-    X_copy = X.copy()
-    for k in np.unique(y):
-        mean = mean_estimator(X[y==k])[0]
-        X_copy[y==k] = _normalise(X[y==k]-mean)+mean
-    return X_copy
-
 class _FEM_classification(FEM):
     def _e_step_indicator(self, X):
         return np.ones((X.shape[0], self.K))
     def _e_step(self, X):
         return super()._e_step(X)
-        
+
     def fit(self, X):
         pass
     def override_params(self, mu, Sigma):
@@ -39,32 +26,16 @@ class _FEM_classification(FEM):
         self.tau_ = tau_new.copy()
     
 
-class LDA_FEM_base():
+class _LDA_FEM_base():
     def __init__(self):
-        self.mean = None
-        self.scatter = None
-        self.cov = None
-
-    def scatter_constant0(self, X):
-        return 1/np.trace(self.scatter)
+        self._mean = None
+        self._scatter = None
+        self._cov = None
         
-    def scatter_constant1(self, X):
-        return X.shape[1]/np.trace(self.scatter)
-    
-    def scatter_constant2(self, X):
-        diff = X - self.mean
-        n = np.trace(self.scatter) / X.shape[1]
-        s = self.scatter / n
-        maha = (np.dot(diff, np.linalg.inv(s)) * diff).sum(1)
-        #plt.plot(np.sort(maha))
-        maha_avg = np.median(np.sort(maha)[:math.floor(0.8*len(maha))])
-        #print("maha avg", maha_avg)
-        return maha_avg / n / X.shape[1]
-    
-    def scatter_constant3(self, X):
-        return self.scatter_constant2(X) * 1e6
-    
-    def FEM_estimate(self, X, normalisation_method=2): #X is {X: I(Zi=k|Xi=xi)=1}
+    def _scatter_constant(self, X):
+        return X.shape[1]/np.trace(self._scatter)
+
+    def _FEM_estimate(self, X): #X is {X: I(Zi=k|Xi=xi)=1}
         # initialise K=2 (for 1 class, but to maintain structure), tau,alpha randomly and means and sigma with Gaussian MLE
         _K = 2
         FEM_estimator = _FEM_classification(_K, rand_initialization=True)
@@ -75,78 +46,70 @@ class LDA_FEM_base():
         cond_prob = FEM_estimator._e_step_indicator(X)
         #run M-step
         FEM_estimation = FEM_estimator._m_step(X, cond_prob)  
-        self.mean = FEM_estimation[1][0,:]; self.scatter = FEM_estimation[2][0,:,:]
-        if normalisation_method == 1:
-            s = self.scatter_constant1(X)
-        elif normalisation_method == 0:
-            s = self.scatter_constant0(X)            
-        elif normalisation_method == 2:
-            s = self.scatter_constant2(X)
-        elif normalisation_method == 3:
-            s = self.scatter_constant3(X)
-        else:
-            assert(1==0)
-        self.cov = self.scatter * s
+        self._mean = FEM_estimation[1][0,:]; self._scatter = FEM_estimation[2][0,:,:]
+        s = self._scatter_constant(X)
+
+        self._cov = self._scatter * s
         #print("scatter->cov:", s)
-        return [self.mean, self.cov]
+        return [self._mean, self._cov]
 
-class LDA_FEM(LDA, LDA_FEM_base):
-    def __init__(self, method='distributional'):
-        super().__init__(method)
-        self.normalisation_method = 2
-    def estimate_parameters(self, X):
-        return self.FEM_estimate(X, self.normalisation_method)
+class LDA_FEM(LDA, _LDA_FEM_base):
+    def _estimate_parameters(self, X):
+        return self._FEM_estimate(X)
 
-class QDA_FEM(LDA_FEM, LDA_FEM_base):
+class QDA_FEM(LDA_FEM, _LDA_FEM_base):
     def __init__(self, method='distributional'):
-        super().__init__(method)
-        self.pool_covs = False
+        super().__init__(method=method, pool_covs=False)
         
-class t_LDA_FEM(t_LDA, LDA_FEM_base):
-    def __init__(self, method='distributional'):
-        super().__init__(method)
-        self.normalisation_method = 2
-    def estimate_parameters(self, X):
-        params = self.FEM_estimate(X, self.normalisation_method)
+class t_LDA_FEM(t_LDA, _LDA_FEM_base):
+    def _estimate_parameters(self, X):
+        params = self._FEM_estimate(X)
         return params + [fit_t_dof(X, *params, dof_0=3)]
     
-class t_QDA_FEM(t_LDA_FEM, LDA_FEM_base):
+class t_QDA_FEM(t_LDA_FEM, _LDA_FEM_base):
     def __init__(self, method='distributional'):
-        super().__init__(method)
-        self.pool_covs = False   
+        super().__init__(method=method, pool_covs=False)
         
 class FEMDA(QDA_FEM):
-    def __init__(self, method='distributional'):
-        super().__init__(method)
-    def _posteriors2(self, X): #->KxN
-        #print("hello")
+    def _log_likelihoods2(self, X): #->KxN
         FEM = _FEM_classification(self._K, rand_initialization=True)
         FEM._initialize(X)
         FEM.override_params(self.means_.T, self.covariance_)
         FEM.update_tau(X)
-        #print(FEM.K)
         cond_prob = FEM._e_step(X)
         return cond_prob.T
     
-    def simple_mahalanobis(self, X, m, S):
+    def _simple_mahalanobis(self, X, m, S):
         diff = X - m
         return (np.dot(diff, np.linalg.inv(S)) * diff).sum(1)
     
-    def _posteriors(self, X):
+    def _log_likelihoods(self, X):
         N,p = X.shape
         log_maha = np.zeros((self._K, N))
         for k in range(self._K):
-            log_maha[k, :] = np.log(self.simple_mahalanobis(X, self.means_[:,k], self.covariance_[k,:,:]))
+            log_maha[k, :] = np.log(self._simple_mahalanobis(X, self.means_[:,k], self.covariance_[k,:,:]))
         _,logdets = np.linalg.slogdet(self.covariance_)
         pik = -0.5 * (p * log_maha + logdets[:,None])
         return pik
 
+def _normalise(a):
+    return (a.T/np.linalg.norm(a, axis=1)).T
+
+def _normalise_means(means_dict):
+    return dict([(k,v/np.linalg.norm(v)) for (k,v) in means_dict.items()])
+
+def _normalise_centered(X, y, mean_estimator=fit_t):
+    X_copy = X.copy()
+    for k in np.unique(y):
+        mean = mean_estimator(X[y==k])[0]
+        X_copy[y==k] = _normalise(X[y==k]-mean)+mean
+    return X_copy
+
 class FEMDA_N(FEMDA):
-    def __init__(self, method='distributional'):
-        super().__init__(method)
-    def fit(self, X,y):
-        X_n = _normalise_centered(X, y, mean_estimator=lambda x:LDA_FEM_base().FEM_estimate(x, self.normalisation_method))
+    def fit(self, X, y):
+        X_n = _normalise_centered(X, y, mean_estimator=lambda x:_LDA_FEM_base()._FEM_estimate(x, self.normalisation_method))
         super().fit(X_n,y)
+        return self
 
 class FEM_predictor(_FEM_classification):
     def __init__(self, K):
