@@ -7,7 +7,7 @@ from sklearn import decomposition #PCA
 from sklearn import metrics # AMII and ARI
 from matplotlib import pyplot as plt
 from matplotlib.transforms import Bbox
-from plotnine import *
+from plotnine import ggplot, aes
 from plotnine.data import *
 from femda import *
 def import_subset(dataset, labels, selected_cat, n_pca, n_sample, pca=None):

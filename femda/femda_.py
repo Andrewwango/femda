@@ -92,25 +92,22 @@ class FEMDA(QDA_FEM):
         pik = -0.5 * (p * log_maha + logdets[:,None])
         return pik
 
-def _normalise(a):
-    return (a.T/np.linalg.norm(a, axis=1)).T
-
-def _normalise_means(means_dict):
-    return dict([(k,v/np.linalg.norm(v)) for (k,v) in means_dict.items()])
-
-def _normalise_centered(X, y, mean_estimator=fit_t):
-    X_copy = X.copy()
-    for k in np.unique(y):
-        mean = mean_estimator(X[y==k])[0]
-        X_copy[y==k] = _normalise(X[y==k]-mean)+mean
-    return X_copy
-
 class FEMDA_N(FEMDA):
-    def fit(self, X, y):
-        X_n = _normalise_centered(X, y, mean_estimator=lambda x:_LDA_FEM_base()._FEM_estimate(x, self.normalisation_method))
-        super().fit(X_n,y)
-        return self
 
+    def _normalise_centered(self, X, y, mean_estimator=fit_t):
+        def _normalise(a):
+            return (a.T/np.linalg.norm(a, axis=1)).T
+        X_copy = X.copy()
+        for k in np.unique(y):
+            mean = mean_estimator(X[y==k])[0]
+            X_copy[y==k] = _normalise(X[y==k]-mean)+mean
+        return X_copy
+
+    def fit(self, X, y):
+        X_n = self._normalise_centered(X, y, mean_estimator=lambda x:_LDA_FEM_base()._FEM_estimate(x))
+        return super().fit(X_n,y)
+
+# don't know what this is for
 class FEM_predictor(_FEM_classification):
     def __init__(self, K):
         super().__init__(K, rand_initialization=True)
