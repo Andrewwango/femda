@@ -73,6 +73,9 @@ class t_QDA_FEM(t_LDA_FEM, _LDA_FEM_base):
         super().__init__(method=method, pool_covs=False)
         
 class FEMDA(QDA_FEM):
+    def __init__(self):
+        super().__init__(method='distributional')
+
     def _log_likelihoods2(self, X): #->KxN
         FEM = _FEM_classification(self._K, rand_initialization=True)
         FEM._initialize(X)

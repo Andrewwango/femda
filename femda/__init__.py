@@ -1,1 +1,1 @@
-from .femda_ import FEMDA, FEMDA_N
+from .femda_ import FEMDA

@@ -13,9 +13,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from experiments_utils import *
-from femda import *
+from femda import FEMDA
 
 # For testing and experiments
+from femda._models_femda import FEMDA_N
 from femda._models_lda import LDA, QDA
 from femda._models_t_lda import t_LDA, t_QDA
 from femda._models_gqda import GQDA, RGQDA
