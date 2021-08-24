@@ -164,7 +164,7 @@ class LDA(BaseEstimator, ClassifierMixin):
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
-            Training data.
+            Training data of one class.
 
         Returns
         -------
