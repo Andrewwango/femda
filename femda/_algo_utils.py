@@ -111,34 +111,54 @@ def fit_t(X, iter=200, eps=1e-6):
 
 
 def label_outliers_kth2(X_k, mean, cov, thres=0):
-    """[summary]
+    """Label outliers for kth class according to Mahalanobis distance.
 
     Args:
-        X_k ([type]): [description]
-        mean ([type]): [description]
-        cov ([type]): [description]
-        thres (int, optional): [description]. Defaults to 0.
+        X_k (array-like of shape (n_samples, n_features)): Training data for
+            kth class.
+        mean (array-like of shape (n_features,)): Mean vector.
+        cov (array-like of shape (n_features, n_features)): Scatter matrix.
+        thres (float, optional): Mahalanobis outlier threshold. Defaults to 0.
 
     Returns:
-        [type]: [description]
+        array-like of type bool, shape (n_samples,) : whether samples are 
+            outliers.
     """
     diff = X_k - mean
     maha = (np.dot(diff, np.linalg.inv(cov)) * diff).sum(1)
     def split(n, perc):
-        a = int(np.floor(n*perc))
-        return a,n-a
+        a = int(np.floor(n *perc))
+        return a, n-a
     _,n_to_keep = split(X_k.shape[0], thres)
-    t = maha[np.argsort(maha)[n_to_keep-1]]
+    t = maha[np.argsort(maha)[n_to_keep - 1]]
     outlierness = (maha > t)
     return outlierness
 
-def label_outliers(X,y, means,covs, thres=0.05):
-    if thres==0: return y
+def label_outliers(X, y, means, covs, thres=0.05):
+    """Label outliers in data according to Mahalanobis distance.
+
+    Args:
+        X_k (array-like of shape (n_samples, n_features)): Training data for
+            kth class.
+        means (array-like of shape (n_features, n_classes)): Means vectors.
+        covs (array-like of shape (n_classes, n_features, n_features)): 
+            Scatter matrices.
+        thres (float, optional): Mahalanobis threshold. Defaults to 0.05.
+
+    Returns:
+        array-like (shape (n_samples,)) : preds with outliers relabelled as -1.
+    """
+    if thres == 0:
+        return y
+
     y_new = y.copy()
     ks = np.unique(y)
+
     for ki, k in enumerate(ks):
         k = int(k)
-        outlierness = label_outliers_kth2(X[y==k,:], means[:,ki], covs[ki,:,:], thres=thres)
+        outlierness = label_outliers_kth2(X[y==k,:], means[:,ki], covs[ki,:,:], 
+                                          thres=thres)
         b = np.where(y==k)[0][outlierness]
         y_new[b] = -1#k+5
+
     return y_new
