@@ -1,13 +1,14 @@
 """
 TODO: t_QDA, GQDA etc. all have short descriptions referring back to LDA.
 TODO: all other methods have full descriptions
+Models for classical Linear Discriminant Analysis and 
+Quadratic Discriminant Analysis.
 """
 import numpy as np
 import time
 
 from scipy import stats
 from sklearn.base import BaseEstimator, ClassifierMixin
-
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
@@ -95,15 +96,18 @@ class LDA(BaseEstimator, ClassifierMixin):
         r = range(self._K) if ki is None else [ki]
         for k in r:
             m = X - self.means_[:,k]
-            kth_maha = np.array(list(map(lambda d: d @ np.linalg.inv(self.covariance_)[k,:,:] @ d[:,None], m))).T
-            #kth_maha = np.diag(m @ np.linalg.inv(self.covariances)[k,:,:] @ m.T)]
+            kth_maha = np.array(list(map(lambda d:
+                d @ np.linalg.inv(self.covariance_)[k,:,:] @ d[:,None], m
+            ))).T
+            #kth_maha = np.diag(m \
+            # @ np.linalg.inv(self.covariances)[k,:,:] @ m.T)]
             ret += [kth_maha]
+        
         return np.vstack(ret) if ki is None else ret[0]
     
     def _general_discriminants(self, X): #KxN
-        """Calculate generalised discriminant function of new data 
-        according to model per class. This is only used if the method
-        is generalsied.
+        """Calculate generalised discriminant function of new data according 
+        to model per class. This is only used if the method is generalsied.
 
         Parameters
         ----------
@@ -115,7 +119,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         p : ndarray of shape (n_classes, n_samples)
             Log likelihood per class of new data.
         """
-        return -0.5*np.log(np.linalg.det(self.covariance_))[:,None] * self.fudge - self._bose_k()[:,None] * self._mahalanobis(X)
+        return -0.5 * np.log(np.linalg.det(self.covariance_))[:,None] \
+            * self.fudge - self._bose_k()[:,None] * self._mahalanobis(X)
     
     def _kth_likelihood(self, k): # non-log likelihood
         """Return random variable which calculates likelihood of
@@ -131,7 +136,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         p : multi_rv_generic
             Random variable calculating kth likelihood.
         """
-        return stats.multivariate_normal(mean=self.means_[:,k], cov=self.covariance_[k,:,:])
+        return stats.multivariate_normal(mean=self.means_[:,k],
+                                         cov=self.covariance_[k,:,:])
     
     def _log_likelihoods(self, X):
         """Calculate log likelihood of new data according to model per class.
@@ -147,7 +153,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         p : ndarray of shape (n_classes, n_samples)
             Log likelihood per class of new data.
         """
-        return np.log(np.array([self._kth_likelihood(k).pdf(X) for k in range(self._K)]))
+        return np.log(np.array([self._kth_likelihood(k).pdf(X) 
+                                for k in range(self._K)]))
        
     def _estimate_parameters(self, X): #NxM -> [1xM, MxM]
         """Estimate parameters of one class according to Gaussian class
@@ -171,7 +178,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         """
         Choose between generalised and distributional discriminants.
         """
-        if not(type(self.method) is str and self.method in ['generalised', 'distributional']):
+        if not(type(self.method) is str 
+           and self.method in ['generalised', 'distributional']):
             raise ValueError('Method must be generalised or distributional')
         if self.method=='generalised':
             return self._general_discriminants(X)
@@ -179,7 +187,7 @@ class LDA(BaseEstimator, ClassifierMixin):
             return self._log_likelihoods(X)
         
     def fit(self, X, y):
-        """Fit LDA model according to data.
+        """Fit Discriminant Analysis model according to data.
 
         Parameters
         ----------
@@ -191,27 +199,31 @@ class LDA(BaseEstimator, ClassifierMixin):
         """
         X, y = check_X_y(X, y)
         X, y = self._validate_data(X, y, ensure_min_samples=2, estimator=self,
-                                   dtype=[np.float64, np.float32], ensure_min_features=2)
+                        dtype=[np.float64, np.float32], ensure_min_features=2)
 
         st=time.time()
 
         self.classes_ = unique_labels(y) #1xK
         self._K = len(self.classes_)
         self._M = X.shape[1]
-        self.X_classes_ = [X[np.where(y == k), :][0,:,:] for k in self.classes_] #Kxn_kxM
+        self.X_classes_ = [X[np.where(y == k), :][0,:,:] 
+                           for k in self.classes_] #Kxn_kxM
         n = np.array([c.shape[0] for c in self.X_classes_])
         
         self.priors_ = n / n.sum()
         
         try:
-            self.parameters_ = [self._estimate_parameters(c) for c in self.X_classes_]
+            self.parameters_ = [self._estimate_parameters(c) 
+                                for c in self.X_classes_]
         except np.linalg.LinAlgError:
-            self.parameters_ = [[np.zeros(self._M), np.eye(self._M)] for c in self.X_classes_]
+            self.parameters_ = [[np.zeros(self._M), np.eye(self._M)] 
+                                for c in self.X_classes_]
 
         self.means_ = np.array([param[0] for param in self.parameters_]).T
         self.covariance_ = np.array([param[1] for param in self.parameters_])
-        self.covariance_ = np.repeat(np.sum(n[:,None,None] * self.covariance_, axis=0)[None,:],self._K,axis=0) / n.sum() \
-                if self.pool_covs else self.covariance_ 
+        self.covariance_ = self.covariance_ if not self.pool_covs else \
+            np.repeat(np.sum(n[:,None,None] * self.covariance_, \
+            axis=0)[None,:], self._K, axis=0) / n.sum()
         
         assert(n.sum() == X.shape[0])
         assert(self._M == self.covariance_.shape[2])
@@ -224,7 +236,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         Base function for all inference, so validate here.
         Compute log-posterior of new data with likelihoods and priors.
         """
-        check_is_fitted(self, ["means_", "covariance_", "priors_", "parameters_"])
+        check_is_fitted(self, ["means_", "covariance_", 
+                               "priors_", "parameters_"])
         X = check_array(X)
         try:
             dk = self._dk_from_method(X)
@@ -266,7 +279,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         y_pred : ndarray of shape (n_samples,)
         """
         y = self.classes_[np.nanargmax(self._decision_function(X), axis=1)]
-        return label_outliers(X, y, self.means_, self.covariance_, thres=percent_outliers)
+        return label_outliers(X, y, self.means_, self.covariance_, 
+                              thres=percent_outliers)
        
     def predict_proba(self, X):
         """Estimate probability of class membership.
@@ -287,7 +301,8 @@ class LDA(BaseEstimator, ClassifierMixin):
     
 
 class QDA(LDA):
-    """Quadratic Discriminant Analysis classifier. See LDA for more details.
+    """Quadratic Discriminant Analysis classifier.
+        See `LDA` for more details.
         Inherits from LDA and unsets covariance pooling. 
     """
     def __init__(self, method='distributional'):

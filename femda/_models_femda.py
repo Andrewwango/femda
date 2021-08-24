@@ -1,5 +1,8 @@
+"""
+Base models and related models for our robust FEMDA:
+Flexible EM-Inspired Discriminant Analysis.
+"""
 import numpy as np
-import math
 
 from ._fem import FEM
 from ._algo_utils import fit_t_dof, fit_t
