@@ -90,7 +90,7 @@ class _LDA_FEM_base():
         params_estimated_from_FEM = FEM_estimator._m_step(X, cond_prob)  
         self._mean = params_estimated_from_FEM[1][0,:]
         self._cov = params_estimated_from_FEM[2][0,:,:]
-        self._cov *= X.shape[1] / np.trace(self._scatter)
+        self._cov *= X.shape[1] / np.trace(self._cov)
         return [self._mean, self._cov]
 
 
