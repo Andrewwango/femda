@@ -5,7 +5,7 @@ femda/images/
 femda/breizhcrops_dataset
 Overview
 
-
+.vscode/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
