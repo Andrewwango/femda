@@ -21,7 +21,10 @@ freq_shuffle        = 10
 pas                 = 0.1
 
 
-def labo_test():
+def labo_test(path_results_simulated_data=path_results_simulated_data,
+              path_results_real_data=path_results_real_data,
+              path_dataset=path_dataset
+             ):
 
     ####################################################################################################################################
     ###################################                                                              ###################################
