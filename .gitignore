@@ -1,5 +1,5 @@
 test*
-experiments*.*py*
+experiments*py*
 data/
 old/
 src/smallnorb.py
