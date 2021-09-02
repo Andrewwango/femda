@@ -237,8 +237,9 @@ class LDA(BaseEstimator, ClassifierMixin):
         Compute log-posterior of new data with likelihoods and priors.
         """
         check_is_fitted(self, ["means_", "covariance_", 
-                               "priors_", "parameters_"])
+                               "priors_", "parameters_", "classes_"])
         X = check_array(X)
+        
         try:
             dk = self._dk_from_method(X)
         except np.linalg.LinAlgError:
@@ -278,7 +279,8 @@ class LDA(BaseEstimator, ClassifierMixin):
         -------
         y_pred : ndarray of shape (n_samples,)
         """
-        y = self.classes_[np.nanargmax(self._decision_function(X), axis=1)]
+        dk = self._decision_function(X)
+        y = self.classes_[np.nanargmax(dk, axis=1)]
         return label_outliers(X, y, self.means_, self.covariance_, 
                               thres=percent_outliers)
        
