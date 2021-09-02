@@ -1,0 +1,5 @@
+- replace - in filename with _
+- add __init__.py
+- put labo_test code inside labo_test() function
+- add run_experiments function
+- prepend all relative imports with "from ."
