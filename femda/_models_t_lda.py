@@ -4,7 +4,7 @@ Discriminant Analyses.
 """
 import numpy as np
 from scipy import stats, special
-from ._algo_utils import fit_t
+from ._algo_utils import fit_t, fit_t2
 from ._models_lda import LDA
 
 class t_LDA(LDA):
@@ -36,7 +36,7 @@ class t_LDA(LDA):
                 ndarray of shape (n_features, n_features), float]\
             Estimated mean vector, covariance matrix, degree of freedom.
         """
-        return fit_t(X)
+        return fit_t2(X)
     
     def _bose_k(self):
         """ Generalised discriminant coefficient according to

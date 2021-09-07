@@ -1,5 +1,7 @@
 import numpy as np
 from scipy import special, optimize
+import matplotlib.pyplot as plt
+from .experiments.estimateurs import t_distribution_estimator
 
 def get_regularization_lambda():
     return 1e-5
@@ -113,8 +115,8 @@ def fit_t(X, iter=200, eps=1e-6):
     dof = 3
     obj = []
 
-    for i in range(2000):
-        if i>1998: print("t not converged")
+    for i in range(200):
+        if i>198: print("t not converged", obj[-1])
         # E step
         z,delta = t_EM_e_step(D, dof, mu, cov)
         
@@ -131,8 +133,15 @@ def fit_t(X, iter=200, eps=1e-6):
         mu = X - mean.squeeze()[None,:]
         cov = np.einsum('ij,ik->jk', mu, mu * z[:,None])/N
         dof = fit_t_dof(X, None, cov, dof, max_iter=1, mu=mu)
-
+    #plt.plot(obj)
+    #plt.show()
+    #print(obj)
     return mean.squeeze(), regularize(cov), dof
+
+def fit_t2(X):
+    test = t_distribution_estimator(X, np.zeros(X.shape[0]))
+    return test[0][0], test[1][0], test[2]
+
 
 
 def label_outliers_kth2(X_k, mean, cov, thres=0):
