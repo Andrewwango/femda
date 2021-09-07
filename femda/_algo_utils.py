@@ -1,6 +1,32 @@
 import numpy as np
 from scipy import special, optimize
 
+def get_regularization_lambda():
+    return 1e-5
+
+def regularize(sigma, lambd = get_regularization_lambda()):
+    
+    """ Returns a regularized version of the matrix sigma to avoid singular matrix issues.
+    
+    Parameters
+    ----------
+    sigma : 2-d array of size m*m
+            covariance matrix to regularize
+    lambd : float
+            covariance matrix is regularized by lambd * Id
+    Returns
+    -------
+    sigma : 2-d array of size m*m
+            regularized covariance matrix
+    """ 
+    
+    return sigma + np.eye(len(sigma)) * lambd
+
+def fit_gaussian(X):
+    n_reg = X.shape[0] + get_regularization_lambda()
+    m = (X.sum(axis=0) / n_reg)[None, :]
+    return m[0], regularize(np.dot( (X-m).T, X-m ) / (n_reg - 1))
+
 def t_EM_e_step(D, dof, mu, cov):
     """Run one E-step of the EM algorithm to fit Student-t. See Murphy,
     Machine Learning: A Probabilistic Perspective for details.
@@ -16,7 +42,7 @@ def t_EM_e_step(D, dof, mu, cov):
         delta
         See Murphy for details.
     """
-    delta = np.einsum('ij,ij->i', mu, np.linalg.solve(cov,mu.T).T)
+    delta = np.einsum('ij,ij->i', mu, np.linalg.solve(regularize(cov),mu.T).T)
     z = (dof + D) / (dof + delta)
     return z,delta
 
@@ -82,14 +108,13 @@ def fit_t(X, iter=200, eps=1e-6):
             Estimated mean vector,  covariance matrix and degree of freedom.
     """
     N,D = X.shape
-    cov = np.cov(X,rowvar=False)
-    mean = X.mean(axis=0)
+    mean, cov = fit_gaussian(X)
     mu = X - mean[None,:]
     dof = 3
     obj = []
 
-    for i in range(iter):
-
+    for i in range(2000):
+        if i>1998: print("t not converged")
         # E step
         z,delta = t_EM_e_step(D, dof, mu, cov)
         
@@ -107,7 +132,7 @@ def fit_t(X, iter=200, eps=1e-6):
         cov = np.einsum('ij,ik->jk', mu, mu * z[:,None])/N
         dof = fit_t_dof(X, None, cov, dof, max_iter=1, mu=mu)
 
-    return mean.squeeze(), cov, dof
+    return mean.squeeze(), regularize(cov), dof
 
 
 def label_outliers_kth2(X_k, mean, cov, thres=0):
@@ -162,3 +187,4 @@ def label_outliers(X, y, means, covs, thres=0.05):
         y_new[b] = -1#k+5
 
     return y_new
+

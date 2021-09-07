@@ -12,7 +12,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
-from ._algo_utils import label_outliers
+from ._algo_utils import label_outliers, regularize, fit_gaussian
 
 class LDA(BaseEstimator, ClassifierMixin):
     """Linear Discriminant Analysis
@@ -136,8 +136,10 @@ class LDA(BaseEstimator, ClassifierMixin):
         p : multi_rv_generic
             Random variable calculating kth likelihood.
         """
+        print("allowing sing")
         return stats.multivariate_normal(mean=self.means_[:,k],
-                                         cov=self.covariance_[k,:,:])
+                                         cov=self.covariance_[k,:,:],
+                                         allow_singular=True)
     
     def _log_likelihoods(self, X):
         """Calculate log likelihood of new data according to model per class.
@@ -172,7 +174,7 @@ class LDA(BaseEstimator, ClassifierMixin):
                 ndarray of shape (n_features, n_features)]\
             Estimated mean vector and covariance matrix.
         """
-        return [X.mean(axis=0), np.cov(X.T)]
+        return fit_gaussian(X)#[X.mean(axis=0), np.cov(X.T)]
 
     def _dk_from_method(self, X): #NxM -> KxN
         """
@@ -216,6 +218,7 @@ class LDA(BaseEstimator, ClassifierMixin):
             self.parameters_ = [self._estimate_parameters(c) 
                                 for c in self.X_classes_]
         except np.linalg.LinAlgError:
+            print("didn't even fit...")
             self.parameters_ = [[np.zeros(self._M), np.eye(self._M)] 
                                 for c in self.X_classes_]
 
@@ -240,9 +243,12 @@ class LDA(BaseEstimator, ClassifierMixin):
                                "priors_", "parameters_", "classes_"])
         X = check_array(X)
         
+        #try:
+        dk = self._dk_from_method(X)
         try:
-            dk = self._dk_from_method(X)
+            pass
         except np.linalg.LinAlgError:
+            print("oops")
             dk = np.zeros((len(self.classes_), X.shape[0]))
         dk = dk + np.log(self.priors_[:, None])
         return dk.T #return in standard sklearn shape NxK

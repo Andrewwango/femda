@@ -5,9 +5,10 @@ Flexible EM-Inspired Discriminant Analysis.
 import numpy as np
 
 from ._fem import FEM
-from ._algo_utils import fit_t_dof, fit_t
+from ._algo_utils import fit_t_dof, fit_t, regularize, fit_gaussian
 from ._models_lda import LDA
 from ._models_t_lda import t_LDA
+from .experiments.estimateurs import femda_estimator
 
 class _FEM_parameter_estimator(FEM):
     """Class to use the EM steps contained in the FEM clustering algorithm for
@@ -82,7 +83,7 @@ class _LDA_FEM_base():
             np.repeat(X.mean(axis=0)[None,:], _K, axis=0), 
             np.repeat(np.cov(X.T)[None,:], _K, axis=0)
         )
-        
+
         #run E-step to get indicators
         cond_prob = FEM_estimator._e_step_indicator(X)
 
@@ -99,6 +100,9 @@ class LDA_FEM(LDA, _LDA_FEM_base):
     Stepping stone to FEMDA! See `_models_LDA.LDA`, `_LDA_FEM_base` for more.
     Inherits from `_models_LDA.LDA` and `_LDA_FEM_base`.
     """
+    def __init__(self, method="distributional", pool_covs=False):
+        super().__init__(method=method, pool_covs=pool_covs)
+        self.test = "pierre"
     def _estimate_parameters(self, X):
         """Estimate parameters (mean, scatter) of one class with FEM algorithm,
         according to flexible Elliptically Symmetrical model.
@@ -114,7 +118,13 @@ class LDA_FEM(LDA, _LDA_FEM_base):
                 ndarray of shape (n_features, n_features)]\
             Estimated mean vector and covariance matrix.
         """
-        return self._estimate_parameters_with_FEM(X)
+        if self.test == "pierre":
+            test = femda_estimator(X, np.zeros(X.shape[0]))
+            return test[0][0], test[1][0]
+        elif self.test == "me":
+            return self._estimate_parameters_with_FEM(X)
+        else:
+            raise ValueError("bleuh")
 
 class QDA_FEM(LDA_FEM):
     """Quadratic Discriminant Analysis with FEM-Inspired parameter estimation.
@@ -249,6 +259,8 @@ class FEMDA_N(FEMDA):
         """
         X_n = self._normalise_centered(X, y, mean_estimator = 
                     lambda x:_LDA_FEM_base()._estimate_parameters_with_FEM(x))
+        print("X", X)
+        print("X-N", X_n)
         return super().fit(X_n,y)
 
 

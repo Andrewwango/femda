@@ -18,7 +18,8 @@ class t_LDA(LDA):
     def _kth_likelihood(self, k):
         return stats.multivariate_t(loc=self.means_[:,k], 
                                     shape=self.covariance_[k,:,:], 
-                                    df=self.dofs_[k])
+                                    df=self.dofs_[k],
+                                    allow_singular=True)
     
     def _estimate_parameters(self, X):
         """Estimate parameters of one class according to Student-t class

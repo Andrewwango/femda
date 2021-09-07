@@ -17,6 +17,18 @@ FEMDA()
 0.9666666666666667
 ```
 
+Using a `sklearn.pipeline.Pipeline`...
+
+```python
+>>> from sklearn.datasets import load_digits
+>>> from sklearn.pipeline import make_pipeline
+>>> from sklearn.decomposition import PCA
+>>> X, y = load_digits(return_X_y=True)
+>>> pipe = make_pipeline(PCA(n_components=5), FEMDA()).fit(X, y)
+>>> pipe.predict(X)
+...
+```
+
 ## Run the experiments presented in the paper
 ```python
 >>> from femda.experiments import run_experiments()

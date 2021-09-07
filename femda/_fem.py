@@ -12,6 +12,9 @@ from scipy.stats._multivariate import _PSD
 from sklearn.cluster import KMeans
 from scipy.spatial import cKDTree
 
+from._algo_utils import regularize
+import matplotlib.pyplot as plt
+
 class FEM():
     '''Implements the F-EM algorithm     
     
@@ -233,8 +236,11 @@ class FEM():
             tau_ite_sr = np.ones((n, ))
             convergence_fp = False
             ite_fp = 1
-            while not(convergence_fp) and ite_fp<self.max_iter_fp:
-                inv_Sigma_fixed_point = np.linalg.inv(Sigma_fixed_point)
+            mean_error = []
+            while not(convergence_fp) and ite_fp<200:#self.max_iter_fp:
+                if ite_fp > 198: 
+                    print("m-step not converged", mean_error[-1])
+                inv_Sigma_fixed_point = np.linalg.inv(regularize(Sigma_fixed_point))
                 diff = X - mu_fixed_point             
                 sq_maha = (np.dot(diff, inv_Sigma_fixed_point) * diff).sum(1) # multiple quadratic form
                 
@@ -289,21 +295,26 @@ class FEM():
 
                 convergence_fp = True
                 convergence_fp = convergence_fp and (math.sqrt(np.inner(mu_fixed_point - mu_fixed_point_new, mu_fixed_point - mu_fixed_point_new)/p) < 10**(-6))
+                mean_error += [(math.sqrt(np.inner(mu_fixed_point - mu_fixed_point_new, mu_fixed_point - mu_fixed_point_new)/p))]
+                #if convergence_fp : print("mean convergence")
                 convergence_fp = convergence_fp and (np.linalg.norm(Sigma_fixed_point_new-Sigma_fixed_point, ord='fro')/p) < 10**(-6)
-
+                if convergence_fp: print("m-step converged")
                 mu_fixed_point = mu_fixed_point_new.copy()
                 Sigma_fixed_point = Sigma_fixed_point_new.copy() 
 
                 ite_fp += 1
 
             mu_new[k] = mu_fixed_point
-            Sigma_new[k] = Sigma_fixed_point 
+            Sigma_new[k] = regularize(Sigma_fixed_point)
 
             # UPDATE tau
             diff = X - mu_new[k]
-            tau_new[:, k] = (np.dot(diff, np.linalg.inv(Sigma_new[k])) * diff).sum(1) / p
+            tau_new[:, k] = (np.dot(diff, np.linalg.inv(regularize(Sigma_new[k]))) * diff).sum(1) / p
             tau_new[:, k] = np.where(tau_new[:, k] < 10**(-12) , 10**(-12),
                                      np.where(tau_new[:, k] > 10**(12), 10**(12), tau_new[:, k]))
+            #print(mean_error)
+            #plt.plot(mean_error)
+            #plt.show()
 
         return alpha_new, mu_new, Sigma_new, tau_new
     
