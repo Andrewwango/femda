@@ -15,6 +15,10 @@ class t_LDA(LDA):
         discriminant depends on x^2 because of differing dofs 
         (assuming same dofs = MMD classifier)
     """
+    def __init__(self, method="distributional", pool_covs=True):
+        super().__init__(method=method, pool_covs=pool_covs)
+        self.test = "me"
+
     def _kth_likelihood(self, k):
         return stats.multivariate_t(loc=self.means_[:,k], 
                                     shape=self.covariance_[k,:,:], 
@@ -36,7 +40,13 @@ class t_LDA(LDA):
                 ndarray of shape (n_features, n_features), float]\
             Estimated mean vector, covariance matrix, degree of freedom.
         """
-        return fit_t2(X)
+#        if self.test == "me":
+#            return fit_t(X)
+#        elif self.test == "test":
+#            return fit_t2(X)
+#        else:
+#            raise ValueError("bleuh")
+        return fit_t(X)
     
     def _bose_k(self):
         """ Generalised discriminant coefficient according to

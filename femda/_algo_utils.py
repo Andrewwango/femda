@@ -1,31 +1,37 @@
 import numpy as np
 from scipy import special, optimize
-import matplotlib.pyplot as plt
-from .experiments.estimateurs import t_distribution_estimator
+import math
 
-def get_regularization_lambda():
+def get_reg_lambd():
+    """Return default regularization parameter.
+    """
     return 1e-5
 
-def regularize(sigma, lambd = get_regularization_lambda()):
-    
-    """ Returns a regularized version of the matrix sigma to avoid singular matrix issues.
-    
-    Parameters
-    ----------
-    sigma : 2-d array of size m*m
-            covariance matrix to regularize
-    lambd : float
-            covariance matrix is regularized by lambd * Id
-    Returns
-    -------
-    sigma : 2-d array of size m*m
-            regularized covariance matrix
-    """ 
-    
+def regularize(sigma, lambd = get_reg_lambd()):    
+    """Regularizes matrix to avoid singular matrix issues.
+
+    Args:
+        sigma (array-like of shape (n_features, n_features)): scatter matrix
+        lambd (float, optional): reg parameter. Defaults to get_reg_lambd().
+
+    Returns:
+        array-like of shape (n_features, n_features):
+            regularized scatter matrix
+    """
     return sigma + np.eye(len(sigma)) * lambd
 
 def fit_gaussian(X):
-    n_reg = X.shape[0] + get_regularization_lambda()
+    """Fit Gaussian distribution parameters to data, with regularization.
+
+    Args:
+        X (array-like of shape (n_samples, n_features)): Training data.
+
+    Returns:
+        list of [ndarray of shape (n_features,),
+                ndarray of shape (n_features, n_features)] :
+            Estimated mean vector and covariance matrix.
+    """
+    n_reg = X.shape[0] + get_reg_lambd()
     m = (X.sum(axis=0) / n_reg)[None, :]
     return m[0], regularize(np.dot( (X-m).T, X-m ) / (n_reg - 1))
 
@@ -94,7 +100,7 @@ def fit_t_dof(X, mean, cov, dof_0, max_iter=200, mu=None, tol=1e-3):
     return dof
     
 
-def fit_t(X, iter=200, eps=1e-6):
+def fit_t(X, iter=20, eps=1e-6):
     """Fit Student-t distribution to data, according to EM-algorithm as
     described in Murphy, Machine Learning: A Probabilistic Perspective.
     Initialise with Gaussian MLE estimations.
@@ -115,7 +121,8 @@ def fit_t(X, iter=200, eps=1e-6):
     dof = 3
     obj = []
 
-    for i in range(200):
+    for i in range(iter):
+        #print("mean at start", i, mean)
         if i>198: print("t not converged", obj[-1])
         # E step
         z,delta = t_EM_e_step(D, dof, mu, cov)
@@ -130,6 +137,7 @@ def fit_t(X, iter=200, eps=1e-6):
         
         # M step
         mean = (X * z[:,None]).sum(axis=0).reshape(-1,1) / z.sum()
+        #print("mean at end", i, mean)
         mu = X - mean.squeeze()[None,:]
         cov = np.einsum('ij,ik->jk', mu, mu * z[:,None])/N
         dof = fit_t_dof(X, None, cov, dof, max_iter=1, mu=mu)
@@ -138,9 +146,48 @@ def fit_t(X, iter=200, eps=1e-6):
     #print(obj)
     return mean.squeeze(), regularize(cov), dof
 
-def fit_t2(X):
-    test = t_distribution_estimator(X, np.zeros(X.shape[0]))
-    return test[0][0], test[1][0], test[2]
+def fit_t2(X, eps = 1e-5, max_iter = 20):
+
+    n, m          = X.shape
+    n_clusters = n + 1e-5
+    mean, covariance = fit_gaussian(X)
+    v    = 1
+
+    convergence      = False
+    ite              = 1
+
+    while (not convergence) and ite<max_iter:
+        print("m at beginning of ", ite, mean)
+        prev_mean = mean.copy()
+        prev_cov = covariance.copy()
+        prev_v = v
+
+        ite              = ite + 1 
+        mean             = np.zeros(m)
+        covariance       = np.zeros([m,m])
+        sum_mean_weights = 1e-5
+        sum_nu_weights   = 1e-5
+        for i in range(n):
+            mean_weight      = (v + m) / (v + np.dot(np.array([X[i]-mean]), np.dot(np.linalg.inv(regularize(covariance)), np.array([X[i]-mean]).T))[0][0])
+            
+            sum_mean_weights += mean_weight
+            covariance += np.dot(np.array([X[i]-mean]).T, np.array([X[i]-mean])) * mean_weight
+            mean             += mean_weight * X[i]
+            sum_nu_weights  += (np.log(mean_weight) - mean_weight - np.log((v + m)/2) + special.digamma((v + m)/2)) / n_clusters
+        def f(nu):
+            return special.gammaln(nu/2) - 0.5*nu*np.log(nu/2) - 0.5*nu*sum_nu_weights
+        def grad_f(nu):
+            return 0.5*special.digamma(nu/2) - 0.5*np.log(nu/2) - 0.5 - 0.5*sum_nu_weights
+        v = optimize.minimize(f, v, jac = grad_f,bounds=[(0,None)]).x[0]
+        
+        mean /= sum_mean_weights
+        covariance /= n_clusters
+        print("m at end of ", ite, mean)
+        convergence = abs(v-prev_v) + sum(abs(mean-prev_mean)) + sum(sum(abs(covariance-prev_cov)))
+        #print(convergence, "at step", ite)
+        convergence = False#convergence < eps
+    
+    return mean, regularize(covariance), v
 
 
 

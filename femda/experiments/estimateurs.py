@@ -151,6 +151,7 @@ def femda_estimator(X, labels, eps = 1e-5, max_iter = 20):
             for i in range(n):
                 if labels[i] == k:
                     mean_weight      = min([[0.5]], 1 / np.dot(np.array([X[i]-means[k]]), np.dot(np.linalg.inv(regularize(shapes[k])), np.array([X[i]-means[k]]).T)))[0][0]             
+                    #print(mean_weight)
                     mean             = mean + mean_weight * X[i]
                     sum_mean_weights = sum_mean_weights + mean_weight
                     shape            = shape + np.dot(np.array([X[i]-means[k]]).T, np.array([X[i]-means[k]])) * mean_weight
@@ -158,6 +159,7 @@ def femda_estimator(X, labels, eps = 1e-5, max_iter = 20):
             delta_shape = shape * m / n_clusters[k] - shapes[k]
             means[k]    = means[k] + delta_mean
             shapes[k]   = shapes[k] + delta_shape
+            print("trace at", ite, np.trace(shapes[k]))
             convergence = sum(abs(delta_mean)) + sum(sum(abs(delta_shape))) < eps
         shapes[k] = regularize(shapes[k])
     return means, shapes

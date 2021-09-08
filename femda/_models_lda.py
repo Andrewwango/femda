@@ -136,7 +136,6 @@ class LDA(BaseEstimator, ClassifierMixin):
         p : multi_rv_generic
             Random variable calculating kth likelihood.
         """
-        print("allowing sing")
         return stats.multivariate_normal(mean=self.means_[:,k],
                                          cov=self.covariance_[k,:,:],
                                          allow_singular=True)

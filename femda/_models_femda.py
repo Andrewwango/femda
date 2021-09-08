@@ -3,16 +3,18 @@ Base models and related models for our robust FEMDA:
 Flexible EM-Inspired Discriminant Analysis.
 """
 import numpy as np
+from math import sqrt
 
-from ._fem import FEM
-from ._algo_utils import fit_t_dof, fit_t, regularize, fit_gaussian
+from ._algo_utils import regularize, get_reg_lambd, fit_t_dof, fit_gaussian
 from ._models_lda import LDA
 from ._models_t_lda import t_LDA
-from .experiments.estimateurs import femda_estimator
 
-class _FEM_parameter_estimator(FEM):
+
+class _FEM_base():
     """Class to use the EM steps contained in the FEM clustering algorithm for
-    parameter estimation of class labelled data. See `_fem.FEM` for details.
+    parameter estimation of class labelled data. The EM steps here are 
+    modified from the original clustering steps: they only take one class, and
+    the E-step is deterministic since this is now a supervised algorithm.
     """
     def _e_step_indicator(self, X):
         ''' Pseudo E-step of clustering algorithm where all conditional 
@@ -25,40 +27,61 @@ class _FEM_parameter_estimator(FEM):
     
         Returns
         ----------
-        indicator_matrix: ndarray of shape (n_samples, n_classes)
-             Matrix representing determined "class conditional probabilities"
+        indicator_matrix: ndarray of shape (n_samples,)
+             Matrix representing determined "class conditional probabilities".
+             Single row as we only are concerned with one class.
         '''
-        return np.ones((X.shape[0], self.K))
+        return np.ones((X.shape[0]))
+
+    def _m_step(self, X, cond_prob, max_iter = 20, eps=1e-6):
+        ''' M-step of clustering algorithm used to estimate parameters given
+        conditional probabilities.
         
-    def _override_params(self, mu, Sigma):
-        """Override mean and scatter parameters
-        """
-        self.mu_, self.Sigma_ = mu, Sigma
+        Parameters
+        ----------
+        X: array-like of shape (n_samples, n_features)
+            data
+        cond_prob: array-like of shape (n_samples,)
+            Conditional probability matrix from E-step, for one class only, 
+            i.e (cond_prob)_ik = P(Z_i=k|X_i=x_i) where k = 0
+        max_iter: int, default=20
+            Max number of fixed point iterations
+        eps: float, default=1e-6
+            Convergence tolerance
     
-    def _update_tau(self, X):
-        """Force calculation of tau values without rest of M-step
-        """
-        p = X.shape[1]
-        tau_new = np.ones((X.shape[0], self.K))
-        for k in range(self.K):
-            diff = X - self.mu_[k]
-            tau_new[:, k] = (np.dot(diff, np.linalg.inv(self.Sigma_[k])) \
-                * diff).sum(axis=1) / p
-            tau_new[:, k] = np.where(tau_new[:, k] < 10**(-12) , 10**(-12),
-                np.where(tau_new[:, k] > 10**(12), 10**(12), tau_new[:, k]))
+        Returns
+        ----------
+        mean: ndarray of shape (n_features,)
+            The new mean of each mixture component.
+        sigma: ndarray of shape (n_features, n_features)
+            The new regularized covariance of each mixture component.
+        '''
+        n, m = X.shape
+        mean, sigma = fit_gaussian(X)
+        convergence_fp      = False
+        ite_fp              = 1
+        safety = lambda x : np.minimum(0.5, x)
+        while (not convergence_fp) and ite_fp<max_iter:
+            ite_fp += 1
 
-        self.tau_ = tau_new.copy()
-    
-    def fit(self, X):
-        """Do not use this estimator for unsupervised clustering!
-        """
-        pass
-    
+            sigma_inv = np.linalg.inv(regularize(sigma))
+            diff = X - mean
+            sq_maha = (np.dot(diff, sigma_inv) * diff).sum(1)     
+            
+            mean_new = np.dot(safety(cond_prob / sq_maha), X) \
+                    / (safety(cond_prob / sq_maha).sum() + get_reg_lambd())
 
-class _LDA_FEM_base():
-    """Base class for estimating parameters with FEM E- and M-steps.
-    Inherit from this class to use this functionality and override estimation.
-    """
+            sigma_new = np.dot(safety(cond_prob / sq_maha) * diff.T, diff) \
+                    / (n + get_reg_lambd()) * m
+
+            convergence_fp = sqrt(((mean - mean_new)**2).sum() / m) < eps \
+                    and np.linalg.norm(sigma_new - sigma, ord='fro') / m < eps
+
+            mean  = mean_new.copy()
+            sigma = sigma_new.copy()
+
+        return mean, regularize(sigma)
+
     def _estimate_parameters_with_FEM(self, X):
         """Estimate parameters (mean, scatter) of one class with FEM algorithm,
         according to flexible Elliptically Symmetrical model.
@@ -74,35 +97,19 @@ class _LDA_FEM_base():
                 ndarray of shape (n_features, n_features)]\
             Estimated mean vector and covariance matrix.
         """
-        # Note: initialise K=2 (for 1 class, but to maintain structure),
-        #       tau, alpha randomly and means and sigma with Gaussian MLE.
-        _K = 2
-        FEM_estimator = _FEM_parameter_estimator(_K, rand_initialization=True)
-        FEM_estimator._initialize(X)
-        FEM_estimator._override_params(
-            np.repeat(X.mean(axis=0)[None,:], _K, axis=0), 
-            np.repeat(np.cov(X.T)[None,:], _K, axis=0)
-        )
 
-        #run E-step to get indicators
-        cond_prob = FEM_estimator._e_step_indicator(X)
+        cond_prob = self._e_step_indicator(X)
 
         #run M-step
-        params_estimated_from_FEM = FEM_estimator._m_step(X, cond_prob)  
-        self._mean = params_estimated_from_FEM[1][0,:]
-        self._cov = params_estimated_from_FEM[2][0,:,:]
-        self._cov *= X.shape[1] / np.trace(self._cov)
-        return [self._mean, self._cov]
+        mean, cov = self._m_step(X, cond_prob)
+        return mean, cov * X.shape[1] / np.trace(cov)
 
 
-class LDA_FEM(LDA, _LDA_FEM_base):
+class LDA_FEM(LDA, _FEM_base):
     """Linear Discriminant Analysis with FEM-Inspired parameter estimation.
-    Stepping stone to FEMDA! See `_models_LDA.LDA`, `_LDA_FEM_base` for more.
-    Inherits from `_models_LDA.LDA` and `_LDA_FEM_base`.
-    """
-    def __init__(self, method="distributional", pool_covs=False):
-        super().__init__(method=method, pool_covs=pool_covs)
-        self.test = "pierre"
+    Stepping stone to FEMDA! See `_models_LDA.LDA`, `_FEM_base` for more.
+    Inherits from `_models_LDA.LDA` and `_FEM_base`.
+    """        
     def _estimate_parameters(self, X):
         """Estimate parameters (mean, scatter) of one class with FEM algorithm,
         according to flexible Elliptically Symmetrical model.
@@ -118,13 +125,8 @@ class LDA_FEM(LDA, _LDA_FEM_base):
                 ndarray of shape (n_features, n_features)]\
             Estimated mean vector and covariance matrix.
         """
-        if self.test == "pierre":
-            test = femda_estimator(X, np.zeros(X.shape[0]))
-            return test[0][0], test[1][0]
-        elif self.test == "me":
-            return self._estimate_parameters_with_FEM(X)
-        else:
-            raise ValueError("bleuh")
+
+        return self._estimate_parameters_with_FEM(X)
 
 class QDA_FEM(LDA_FEM):
     """Quadratic Discriminant Analysis with FEM-Inspired parameter estimation.
@@ -134,7 +136,7 @@ class QDA_FEM(LDA_FEM):
     def __init__(self, method='distributional'):
         super().__init__(method=method, pool_covs=False)
         
-class t_LDA_FEM(t_LDA, _LDA_FEM_base):
+class t_LDA_FEM(t_LDA, _FEM_base):
     """Student-t Linear Discriminant Analysis with FEM-Inspired parameter
     estimation (discriminant function as usual).
     """
@@ -206,15 +208,6 @@ class FEMDA(QDA_FEM):
         pik = -0.5 * (p * log_maha + logdets[:,None])
         return pik
 
-    def _log_likelihoods_old(self, X):
-        # Doesn't work!
-        FEM = _FEM_parameter_estimator(self._K, rand_initialization=True)
-        FEM._initialize(X)
-        FEM._override_params(self.means_.T, self.covariance_)
-        FEM._update_tau(X)
-        cond_prob = FEM._e_step(X)
-        return cond_prob.T
-
 
 class FEMDA_N(FEMDA):
     """Experimental FEM-Inspired Discriminant Analysis implementation, but
@@ -222,7 +215,7 @@ class FEMDA_N(FEMDA):
     since the FEMDA model fits an arbitrary scale parameter.
     See `FEMDA` for more.
     """
-    def _normalise_centered(self, X, y, mean_estimator=fit_t):
+    def _normalise_centered(self, X, y, mean_estimator=fit_gaussian):
         """Estimate means and normalise data based around them.
 
         Parameters
@@ -233,7 +226,7 @@ class FEMDA_N(FEMDA):
         y : array-like of shape (n_samples,)
             Target values.
         
-        mean_estimator : func, default=`_algo_utils.fit_t`
+        mean_estimator : func, default=`_algo_utils.fit_gaussian`
             Fucnction which returns list of parameters, the first element of
             which returns a mean vector.
         """        
@@ -258,22 +251,8 @@ class FEMDA_N(FEMDA):
             Target values.
         """
         X_n = self._normalise_centered(X, y, mean_estimator = 
-                    lambda x:_LDA_FEM_base()._estimate_parameters_with_FEM(x))
+                    lambda x:_FEM_base()._estimate_parameters_with_FEM(x))
         print("X", X)
         print("X-N", X_n)
         return super().fit(X_n,y)
-
-
-class _FEM_predictor(_FEM_parameter_estimator):
-    """Useless
-    """
-    def __init__(self, K):
-        super().__init__(K, rand_initialization=True)
-    
-    def predict(self, X_new, DA_means, DA_covs):
-        assert(self.K == DA_covs.shape[0])
-        self._initialize(X_new)
-        self._override_params(DA_means.T, DA_covs)
-
-        return super().predict(X_new, thres=0)
 

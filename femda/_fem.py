@@ -237,7 +237,7 @@ class FEM():
             convergence_fp = False
             ite_fp = 1
             mean_error = []
-            while not(convergence_fp) and ite_fp<200:#self.max_iter_fp:
+            while not(convergence_fp) and ite_fp<self.max_iter_fp:
                 if ite_fp > 198: 
                     print("m-step not converged", mean_error[-1])
                 inv_Sigma_fixed_point = np.linalg.inv(regularize(Sigma_fixed_point))
@@ -273,7 +273,7 @@ class FEM():
                     
                     diff = X - mu_fixed_point
                     Sigma_fixed_point_new = np.dot(cond_prob[:, k]/tau_ite * diff.T, diff) / (n * alpha_new[k])
-                    #Sigma_fixed_point_new *= p / np.trace(Sigma_fixed_point_new)
+                    Sigma_fixed_point_new *= p / np.trace(Sigma_fixed_point_new)
                     
                 if self.version==2:
                     
