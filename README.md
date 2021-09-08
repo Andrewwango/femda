@@ -5,6 +5,9 @@ Flexible EM-Inspired Discriminant Analysis is a robust supervised classification
 Andrew Wang, University of Cambridge, Cambridge, UK
 Pierre Houdouin, CentraleSupélec, Paris, France
 
+## Instllation
+`pip install -i https://test.pypi.org/simple/ femda`
+
 ## Get started
 ```python
 >>> from sklearn.datasets import load_iris
@@ -15,6 +18,14 @@ Pierre Houdouin, CentraleSupélec, Paris, France
 FEMDA()
 >>> clf.score(X, y)
 0.9666666666666667
+```
+
+Using a specific dataset...
+```python
+>>> import femda.experiments.preprocessing as pre
+>>> X_train, y_train, X_test, y_test = pre.statlog(r"root\datasets\\")
+>>> FEMDA().fit(X_train, y_train).score(X_test, y_test)
+...
 ```
 
 Using a `sklearn.pipeline.Pipeline`...
@@ -29,7 +40,7 @@ Using a `sklearn.pipeline.Pipeline`...
 ...
 ```
 
-## Run the experiments presented in the paper
+## Run all experiments presented in the paper
 ```python
 >>> from femda.experiments import run_experiments()
 >>> run_experiments()
