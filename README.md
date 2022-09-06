@@ -1,5 +1,6 @@
 # FEMDA: Robust classification with Flexible Discriminant Analysis in heterogeneous data
 Flexible EM-Inspired Discriminant Analysis is a robust supervised classification algorithm that performs well in noisy and contaminated datasets.
+Code for the paper on [IEEE](https://ieeexplore.ieee.org/document/9747576) and [arXiv](https://arxiv.org/abs/2201.02967).
 
 ### Authors
 Andrew Wang, University of Cambridge, Cambridge, UK
